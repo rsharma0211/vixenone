@@ -34,7 +34,7 @@ No GCP credentials or internet access to cloud Firebase are required. The entire
 | Service | Port / URL | Description |
 | --- | --- | --- |
 | **Web (Frontend)** | [http://localhost:5173](http://localhost:5173) | React + Vite + TypeScript application with hot module reload |
-| **API (Backend)** | [http://localhost:8000](http://localhost:8000) | FastAPI application (`/health`, `/api/health`, `/me`) |
+| **API (Backend)** | [http://localhost:8000](http://localhost:8000) | FastAPI application (`/health`, `/api/health`, `/api/me`) |
 | **PostgreSQL** | `localhost:5432` | PostgreSQL 16 database (`vixenone` database, user `vixenone`) |
 | **Firebase Auth Emulator** | `localhost:9099` | Local Firebase Authentication |
 | **Firebase Emulator UI** | [http://localhost:4000](http://localhost:4000) | Web console for inspecting Auth emulator accounts |

@@ -23,7 +23,7 @@ The local development stack consists of four Docker containers on a shared bridg
            |                   +-------------------------------------------+
            |                     (Token verification via Admin SDK)
            +-------------------+
-             (REST: /health, /me)
+             (REST: /health, /api/me)
 ```
 
 1. **`postgres` (`vixenone-postgres`)**:
@@ -42,13 +42,16 @@ The local development stack consists of four Docker containers on a shared bridg
    - Python 3.12-slim, FastAPI, Uvicorn with `--reload`.
    - Listens on `8000`.
    - Data layer: SQLAlchemy 2 (async engine via `psycopg` 3) with shared session provider.
-   - Migrations: Alembic with baseline migration (`0001_baseline`), applied automatically on container startup.
+   - Migrations: Alembic migrations (`0001_baseline`, `0002_create_users_table`), applied automatically on container startup.
+   - User Profile Model: `User` model with UUID primary key, unique `firebase_uid`, `email`, `display_name`, `role` (`user_role` enum: `facilities_manager`, `procurement`, `approver`), timestamps.
    - Auth layer: Firebase Admin SDK validating Bearer tokens; environment-driven initialization (emulator mode when FIREBASE_AUTH_EMULATOR_HOST is set, Application Default Credentials ADC when absent; fails fast in production if emulator is set).
    - AI settings: GEMINI_API_KEY (SecretStr) and GEMINI_MODEL (default gemini-3.6-flash) wired to configuration.
    - Storage layer: Swappable storage interface (`StorageService`) with local disk implementation (`LocalStorageService`) writing to `./uploads`.
    - Endpoints:
      - `GET /health`: Public, returns `{"status": "ok", "db": "ok"}`.
-     - `GET /me`: Protected by Firebase ID token Bearer check, returns `{"uid": ..., "email": ..., "display_name": ...}`.
+     - `GET /api/me`: Protected by Firebase ID token Bearer check, retrieves or creates Postgres user profile with default role `facilities_manager` and email fallback display name; concurrency-safe UPSERT.
+     - `PUT /api/me`: Protected by Firebase ID token Bearer check, updates `display_name` and/or `role` with validation; rejects empty/whitespace names and invalid roles (422).
+     - Bare `/me`: Removed (returns 404).
    - Depends on healthy `postgres` and `firebase-auth-emulator`.
 
 4. **`web` (`vixenone-web`)**:

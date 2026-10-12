@@ -2,7 +2,8 @@ from contextlib import asynccontextmanager
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.core.auth import AuthenticatedUser, get_current_user, init_firebase
+from app.api.users import router as users_router
+from app.core.auth import init_firebase
 from app.core.config import settings
 from app.core.database import check_db_health
 
@@ -30,6 +31,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(users_router)
+
 
 @app.get("/health")
 async def health_check():
@@ -43,17 +46,3 @@ async def health_check():
 @app.get("/api/health")
 async def api_health_check():
     return await health_check()
-
-
-@app.get("/me")
-async def get_me(user: AuthenticatedUser = Depends(get_current_user)):
-    return {
-        "uid": user.uid,
-        "email": user.email,
-        "display_name": user.display_name,
-    }
-
-
-@app.get("/api/me")
-async def get_api_me(user: AuthenticatedUser = Depends(get_current_user)):
-    return await get_me(user)

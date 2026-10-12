@@ -10,32 +10,40 @@ from app.main import app
 client = TestClient(app)
 
 
-def test_me_endpoint_without_token():
+def test_bare_me_endpoint_returns_404():
     response = client.get("/me")
+    assert response.status_code == 404
+    put_response = client.put("/me")
+    assert put_response.status_code == 404
+
+
+def test_api_me_endpoint_without_token():
+    response = client.get("/api/me")
     assert response.status_code == 401
     assert "Missing authentication credentials" in response.json()["detail"]
 
 
-def test_me_endpoint_with_invalid_token():
+def test_api_me_endpoint_with_invalid_token():
     with patch("firebase_admin.auth.verify_id_token", side_effect=Exception("Token expired")):
-        response = client.get("/me", headers={"Authorization": "Bearer invalid_token"})
+        response = client.get("/api/me", headers={"Authorization": "Bearer invalid_token"})
         assert response.status_code == 401
         assert "Invalid authentication token" in response.json()["detail"]
 
 
-def test_me_endpoint_with_valid_token():
+def test_api_me_endpoint_with_valid_token():
     fake_decoded = {
-        "uid": "test-uid-123",
-        "email": "test@vixenone.app",
-        "name": "Test User",
+        "uid": "test-uid-auth-check",
+        "email": "authcheck@vixenone.app",
+        "name": "Auth Check User",
     }
     with patch("firebase_admin.auth.verify_id_token", return_value=fake_decoded):
-        response = client.get("/me", headers={"Authorization": "Bearer valid_token"})
+        response = client.get("/api/me", headers={"Authorization": "Bearer valid_token"})
         assert response.status_code == 200
         data = response.json()
-        assert data["uid"] == "test-uid-123"
-        assert data["email"] == "test@vixenone.app"
-        assert data["display_name"] == "Test User"
+        assert data["email"] == "authcheck@vixenone.app"
+        assert data["display_name"] == "Auth Check User"
+        assert data["role"] == "facilities_manager"
+        assert "id" in data
 
 
 def test_init_firebase_emulator_mode(caplog):

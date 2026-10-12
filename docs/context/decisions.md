@@ -13,4 +13,4 @@ Append-only record of architectural and implementation decisions. Format: `YYYY-
 - 2026-10-12 — Consolidate agent rulebook into GEMINI.md with AGENTS.md pointer — Single source of truth for repository rules reflecting PostgreSQL, async SQLAlchemy, storage interface, and Gemini configuration.
 - 2026-10-12 — Frontend foundation with CSS variables, shadcn/ui primitives, and environment-driven Firebase Auth SDK — Central design token enforcement without inline hex colours, strict user session guards, and persistent responsive shell.
 - 2026-10-12 — Public landing page at root route with pure React shadcn-compatible carousel — Zero-dependency carousel honoring prefers-reduced-motion, auto-advance, and keyboard/touch navigation while reusing existing design tokens and status components.
-
+- 2026-10-12 — PostgreSQL user profile table with concurrency-safe ON CONFLICT upsert and removal of bare /me route — Keep Firebase as the source of identity while storing profile and role data in Postgres, avoiding race conditions on concurrent first calls, and standardizing all profile access under /api/me.

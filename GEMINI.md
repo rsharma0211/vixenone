@@ -307,3 +307,16 @@ Every task ends with `make test` passing. Tasks touching schemas also run `make 
 - **decisions.md** — append-only log. Never rewrite past entries; add a superseding entry instead.
 
 Read all three at the start of every task.
+
+
+## 12. Execution and verification (mandatory)
+
+- Execute directly. No plan document, no approval step, unless the prompt says "plan first".
+- Build and type-check once at the end of the task, not after every edit.
+- No browser automation, no headless Chrome, no screenshots. The human does UI checks manually.
+- Verify only with: unit/integration tests, type-check, lint, curl against running services, grep.
+- If a check fails, fix and re-run that check only. Stop after 3 failed attempts and report.
+- Commit only files this task created or changed, listed explicitly. Never stage everything.
+- Two lanes may run in parallel: api container and frontend container. Never edit files in the other lane's container.
+- Never edit files in the docs design folder. The design spec and screenshots are read-only inputs.
+- Seed and migrate only via Makefile targets.
