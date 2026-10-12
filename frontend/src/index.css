@@ -7,13 +7,21 @@
     --background: #FFFFFF;
     --surface: #F8FAFC;
     --border: #E2E8F0;
-    --text: #0F172A;
+    --text: #142B45;
     --muted: #64748B;
     --muted-surface: #F1F5F9;
 
-    --accent: #4F46E5;
-    --accent-tint: #EEF2FF;
-    --accent-hover: #4338CA;
+    --navy: #142B45;
+    --orange: #FF7A1A;
+    --orange-hover: #E86A0F;
+    --orange-tint: #FFF3EB;
+
+    --accent: #FF7A1A;
+    --accent-tint: #FFF3EB;
+    --accent-hover: #E86A0F;
+
+    --ring: #142B45;
+    --lifecycle-blue: #2563EB;
 
     /* Status pairs (text / background) */
     --status-compliant-text: #15803D;

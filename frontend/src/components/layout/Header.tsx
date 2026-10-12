@@ -41,11 +41,9 @@ export const Header: React.FC<HeaderProps> = ({ onToggleSidebar }) => {
           <PanelLeft className="w-5 h-5 text-muted hover:text-text" />
         </button>
 
-        <div className="flex items-center">
-          <span className="text-base font-semibold text-text tracking-tight">
-            VixenOne
-          </span>
-          <span className="w-1.5 h-1.5 rounded-full bg-accent inline-block ml-1" />
+        <div className="flex items-center gap-1.5 select-none">
+          <img src="/mark.png" alt="VixenOne mark" className="h-7 w-7 object-contain" />
+          <img src="/wordmark.png" alt="VixenOne" className="h-5.5 object-contain" />
         </div>
       </div>
 
@@ -54,7 +52,7 @@ export const Header: React.FC<HeaderProps> = ({ onToggleSidebar }) => {
           <DropdownMenuTrigger asChild>
             <button
               type="button"
-              className="flex items-center gap-3 p-1.5 rounded-lg hover:bg-surface transition-colors focus:outline-none focus:ring-1 focus:ring-accent"
+              className="flex items-center gap-3 p-1.5 rounded-lg hover:bg-surface transition-colors focus:outline-none focus:ring-1 focus:ring-ring"
             >
               <Avatar className="h-8 w-8">
                 <AvatarFallback>{initials}</AvatarFallback>

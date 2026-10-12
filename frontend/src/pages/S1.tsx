@@ -164,17 +164,10 @@ export const S1: React.FC = () => {
 
       {/* Main card */}
       <div className="w-[400px] max-w-full rounded-lg border border-border bg-background p-8 space-y-6">
-        {/* Wordmark and Tagline */}
-        <div className="text-center space-y-1.5">
-          <div className="flex items-center justify-center">
-            <span className="text-2xl font-semibold text-text tracking-tight">
-              VixenOne
-            </span>
-            <span className="w-2 h-2 rounded-full bg-accent inline-block ml-1" />
-          </div>
-          <p className="text-body text-muted">
-            Evidence-backed vendor proposal evaluation.
-          </p>
+        {/* Brand Header */}
+        <div className="flex items-center justify-center gap-2 select-none">
+          <img src="/mark.png" alt="VixenOne mark" className="h-8 w-8 object-contain" />
+          <img src="/wordmark.png" alt="VixenOne" className="h-6 object-contain" />
         </div>
 
         {/* Tab switcher: Sign in · Sign up */}
@@ -286,7 +279,7 @@ export const S1: React.FC = () => {
                 <button
                   type="button"
                   onClick={handleForgotPassword}
-                  className="text-xs text-accent hover:underline focus:outline-none"
+                  className="text-xs text-navy font-medium hover:underline focus:outline-none"
                 >
                   Forgot password?
                 </button>
@@ -437,7 +430,7 @@ export const S1: React.FC = () => {
                 className="text-xs text-muted hover:text-text"
               >
                 Already have an account?{' '}
-                <span className="text-accent hover:underline">Sign in</span>
+                <span className="text-navy font-semibold hover:underline">Sign in</span>
               </button>
             </div>
           </form>

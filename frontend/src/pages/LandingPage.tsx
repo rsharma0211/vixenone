@@ -124,7 +124,7 @@ export const LandingPage: React.FC = () => {
   const [activeSection, setActiveSection] = useState<string>('');
 
   useEffect(() => {
-    document.title = 'VixenOne — Evidence-backed vendor proposal evaluation';
+    document.title = 'VixenOne';
   }, []);
 
   // Scroll spy effect
@@ -219,14 +219,14 @@ export const LandingPage: React.FC = () => {
       {/* 1. STICKY HEADER */}
       <header className="sticky top-0 z-50 h-16 w-full border-b border-border bg-background">
         <div className="max-w-7xl mx-auto h-full px-4 sm:px-6 lg:px-8 flex items-center justify-between">
-          {/* Wordmark with accent dot */}
+          {/* Logo with mark + wordmark */}
           <Link
             to="/"
             onClick={() => window.scrollTo({ top: 0, behavior: prefersReducedMotion ? 'auto' : 'smooth' })}
-            className="flex items-center text-xl font-semibold text-text tracking-tight select-none focus:outline-none"
+            className="flex items-center gap-1.5 select-none focus:outline-none"
           >
-            <span>VixenOne</span>
-            <span className="w-2 h-2 rounded-full bg-accent inline-block ml-1" />
+            <img src="/mark.png" alt="VixenOne mark" className="h-8 w-8 object-contain" />
+            <img src="/wordmark.png" alt="VixenOne" className="h-6 object-contain" />
           </Link>
 
           {/* Centre links */}
@@ -245,10 +245,10 @@ export const LandingPage: React.FC = () => {
                   type="button"
                   onClick={() => scrollToSection(id)}
                   className={cn(
-                    'transition-colors py-1 focus:outline-none focus-visible:ring-1 focus-visible:ring-accent rounded',
+                    'transition-colors py-1 focus:outline-none focus-visible:ring-1 focus-visible:ring-ring rounded',
                     isActive
-                      ? 'text-accent font-semibold'
-                      : 'text-muted hover:text-text'
+                      ? 'text-navy font-semibold border-b-2 border-accent'
+                      : 'text-muted hover:text-navy'
                   )}
                 >
                   {label}
@@ -271,7 +271,7 @@ export const LandingPage: React.FC = () => {
               <>
                 <Link
                   to="/sign-in"
-                  className="text-sm font-medium text-text hover:text-accent transition-colors px-2 py-1"
+                  className="text-sm font-medium text-text hover:text-navy transition-colors px-2 py-1"
                 >
                   Sign in
                 </Link>
@@ -295,7 +295,7 @@ export const LandingPage: React.FC = () => {
             {/* Left Column: Headline and Actions */}
             <div className="lg:col-span-6 space-y-6">
               <Reveal delay={0} reducedMotion={prefersReducedMotion}>
-                <div className="inline-flex items-center rounded-full bg-accent-tint text-accent text-xs font-medium px-3 py-1 border border-accent/20 select-none">
+                <div className="inline-flex items-center rounded-full bg-accent text-navy text-xs font-semibold px-3 py-1 select-none">
                   For facilities & procurement teams
                 </div>
               </Reveal>
@@ -435,7 +435,7 @@ export const LandingPage: React.FC = () => {
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-10">
             <Reveal delay={0} reducedMotion={prefersReducedMotion}>
               <div className="space-y-2">
-                <span className="text-accent text-xs font-semibold tracking-wider uppercase block">
+                <span className="text-navy text-xs font-semibold tracking-wider uppercase block">
                   HOW IT WORKS
                 </span>
                 <h2 className="text-2xl sm:text-3xl font-bold text-text tracking-tight">
@@ -497,7 +497,7 @@ export const LandingPage: React.FC = () => {
         <section id="features" className="py-20 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-10 scroll-mt-16">
           <Reveal delay={0} reducedMotion={prefersReducedMotion}>
             <div className="space-y-2">
-              <span className="text-accent text-xs font-semibold tracking-wider uppercase block">
+              <span className="text-navy text-xs font-semibold tracking-wider uppercase block">
                 FEATURES
               </span>
               <h2 className="text-2xl sm:text-3xl font-bold text-text tracking-tight">
@@ -545,7 +545,7 @@ export const LandingPage: React.FC = () => {
                 reducedMotion={prefersReducedMotion}
               >
                 <div className="rounded-lg border border-border bg-background p-6 space-y-3 h-full transition-all duration-200 hover:-translate-y-[2px] hover:border-slate-300 motion-reduce:hover:translate-y-0">
-                  <div className="w-10 h-10 rounded-lg bg-accent-tint flex items-center justify-center text-accent">
+                  <div className="w-10 h-10 rounded-lg bg-muted-surface flex items-center justify-center text-navy">
                     <Icon className="w-5 h-5 stroke-[2]" />
                   </div>
                   <div className="space-y-1">
@@ -563,7 +563,7 @@ export const LandingPage: React.FC = () => {
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
             <Reveal delay={0} reducedMotion={prefersReducedMotion}>
               <div className="text-center space-y-2">
-                <span className="text-accent text-xs font-semibold tracking-wider uppercase block">
+                <span className="text-navy text-xs font-semibold tracking-wider uppercase block">
                   SHOWCASE
                 </span>
                 <h2 className="text-2xl sm:text-3xl font-bold text-text tracking-tight">
@@ -617,7 +617,7 @@ export const LandingPage: React.FC = () => {
         <section id="who-its-for" className="py-20 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-10 scroll-mt-16">
           <Reveal delay={0} reducedMotion={prefersReducedMotion}>
             <div className="space-y-2">
-              <span className="text-accent text-xs font-semibold tracking-wider uppercase block">
+              <span className="text-navy text-xs font-semibold tracking-wider uppercase block">
                 WHO IT'S FOR
               </span>
               <h2 className="text-2xl sm:text-3xl font-bold text-text tracking-tight">
@@ -635,7 +635,7 @@ export const LandingPage: React.FC = () => {
                 reducedMotion={prefersReducedMotion}
               >
                 <div className="rounded-lg border border-border bg-background p-6 space-y-3 h-full transition-all duration-200 hover:-translate-y-[2px] hover:border-slate-300 motion-reduce:hover:translate-y-0">
-                  <div className="w-10 h-10 rounded-lg bg-accent-tint flex items-center justify-center text-accent">
+                  <div className="w-10 h-10 rounded-lg bg-muted-surface flex items-center justify-center text-navy">
                     <Icon className="w-5 h-5 stroke-[2]" />
                   </div>
                   <div className="space-y-1">
@@ -651,7 +651,7 @@ export const LandingPage: React.FC = () => {
           <div className="block md:hidden space-y-4">
             <div className="rounded-lg border border-border bg-background p-6 space-y-3">
               {React.createElement(roleCards[roleIndex].icon, {
-                className: 'w-6 h-6 text-accent stroke-[2]',
+                className: 'w-6 h-6 text-navy stroke-[2]',
               })}
               <div className="space-y-1">
                 <h3 className="text-base font-semibold text-text">
@@ -717,7 +717,7 @@ export const LandingPage: React.FC = () => {
         <section id="faq" className="py-20 max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8 scroll-mt-16">
           <Reveal delay={0} reducedMotion={prefersReducedMotion}>
             <div className="space-y-2">
-              <span className="text-accent text-xs font-semibold tracking-wider uppercase block">
+              <span className="text-navy text-xs font-semibold tracking-wider uppercase block">
                 FAQ
               </span>
               <h2 className="text-2xl sm:text-3xl font-bold text-text tracking-tight">
@@ -729,7 +729,7 @@ export const LandingPage: React.FC = () => {
           <Reveal delay={60} reducedMotion={prefersReducedMotion}>
             <Accordion type="single" collapsible defaultValue="item-0" className="w-full">
               <AccordionItem value="item-0">
-                <AccordionTrigger className="text-left font-medium text-text hover:text-accent">
+                <AccordionTrigger className="text-left font-medium text-text hover:text-navy">
                   Which documents can I upload?
                 </AccordionTrigger>
                 <AccordionContent className="text-muted leading-relaxed">
@@ -738,7 +738,7 @@ export const LandingPage: React.FC = () => {
               </AccordionItem>
 
               <AccordionItem value="item-1">
-                <AccordionTrigger className="text-left font-medium text-text hover:text-accent">
+                <AccordionTrigger className="text-left font-medium text-text hover:text-navy">
                   Does VixenOne choose the vendor for me?
                 </AccordionTrigger>
                 <AccordionContent className="text-muted leading-relaxed">
@@ -747,7 +747,7 @@ export const LandingPage: React.FC = () => {
               </AccordionItem>
 
               <AccordionItem value="item-2">
-                <AccordionTrigger className="text-left font-medium text-text hover:text-accent">
+                <AccordionTrigger className="text-left font-medium text-text hover:text-navy">
                   How are scores calculated?
                 </AccordionTrigger>
                 <AccordionContent className="text-muted leading-relaxed">
@@ -756,7 +756,7 @@ export const LandingPage: React.FC = () => {
               </AccordionItem>
 
               <AccordionItem value="item-3">
-                <AccordionTrigger className="text-left font-medium text-text hover:text-accent">
+                <AccordionTrigger className="text-left font-medium text-text hover:text-navy">
                   Can I edit the extracted requirements?
                 </AccordionTrigger>
                 <AccordionContent className="text-muted leading-relaxed">
@@ -765,7 +765,7 @@ export const LandingPage: React.FC = () => {
               </AccordionItem>
 
               <AccordionItem value="item-4">
-                <AccordionTrigger className="text-left font-medium text-text hover:text-accent">
+                <AccordionTrigger className="text-left font-medium text-text hover:text-navy">
                   Can I share the results?
                 </AccordionTrigger>
                 <AccordionContent className="text-muted leading-relaxed">
@@ -802,9 +802,9 @@ export const LandingPage: React.FC = () => {
       {/* 9. FOOTER */}
       <footer className="border-t border-border bg-background py-8">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between">
-          <div className="flex items-center text-sm font-semibold text-text tracking-tight select-none">
-            <span>VixenOne</span>
-            <span className="w-1.5 h-1.5 rounded-full bg-accent inline-block ml-1" />
+          <div className="flex items-center gap-1.5 select-none">
+            <img src="/mark.png" alt="VixenOne mark" className="h-6 w-6 object-contain" />
+            <img src="/wordmark.png" alt="VixenOne" className="h-4.5 object-contain" />
           </div>
           <p className="text-xs text-muted">
             Prototype · AI Builder Cup 2026

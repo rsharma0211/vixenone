@@ -69,13 +69,23 @@ The local development stack consists of four Docker containers on a shared bridg
 4. **`web` (`vixenone-web`)**:
    - React 18, Vite 5, TypeScript 5 dev server on `5173`.
    - Polling file-watcher enabled (`usePolling: true`) for Docker live-reload.
-   - Design tokens: CSS custom properties (`--background`, `--surface`, `--accent`, `--status-*`, `--severity-*`), 0 raw hex colours in component code, Inter font with tabular numbers.
+   - Design tokens: CSS custom properties (`--navy: #142B45`, `--accent: #FF7A1A`, `--ring: #142B45`, `--lifecycle-blue: #2563EB`, `--background`, `--surface`, `--status-*`, `--severity-*`), zero indigo across codebase. Primary buttons use accent bg with navy text. Status components strictly decoupled from orange accent.
+   - Brand assets: Mark (`/mark.png`), clean tagline-free wordmark (`/wordmark.png`), and combined logo (`/logo.png`) in `frontend/public/`; favicon configured to mark.
+   - Router: React Router Data Router (`createBrowserRouter`, `RouterProvider`) with navigation blocking (`useBlocker`) for unsaved changes protection on form/settings routes.
+   - Live Routes:
+     - `/`: Public landing page.
+     - `/sign-in`, `/sign-up`: Authentication (S1/S1b).
+     - `/evaluations`: Evaluations list dashboard (S2) with KPI filter tiles, search, status filter, and lifecycle-aware row navigation.
+     - `/evaluations/new`: Create evaluation form (S3) with 2–3 vendor names.
+     - `/evaluations/:id/upload`: Document upload slots (S3 / S3-error) with client file checks, server error row display, and file deletion.
+     - `/settings`: Evaluation criteria configuration with built-in/custom rows, inline validation, live weight sum=100 enforcement, and reset to defaults.
+   - API Client: Typed `ApiClient` in `frontend/src/lib/api/client.ts` with TypeScript types generated via `openapi-typescript` (`frontend/src/lib/types/`), supporting token injection and structured 422 validation error mapping.
    - UI Primitives: shadcn/ui components in `frontend/src/components/ui/` including `Carousel` (touch/swipe, keyboard navigation, auto-advance, reduced-motion).
    - Status components: `FindingStatusBadge`, `LifecycleStatus`, `RiskBadge`, `MandatoryTag` in `frontend/src/components/status/`.
    - Landing Page: Public root route `/` rendering responsive landing page with sticky 64px header, scroll-spy section links, framed hero 3-vendor compliance comparison card, 3-step How It Works, 6-feature grid, Showcase screenshot carousel, Who It's For role carousel, Principle band, FAQ accordion, CTA, and footer.
-   - App Shell: `Header` (fixed 56px, wordmark, user dropdown calling `/api/me`), `Sidebar` (expanded 240px with "+ New evaluation", "Evaluations", "RECENT" mock list, pinned Settings/Help; collapsed 64px tooltip mode, state persisted in `localStorage`), `AppShell` with full-screen layout and 520px slide-out drawer `Sheet`.
+   - App Shell: `Header` (fixed 56px, mark + wordmark images, user dropdown calling `/api/me`), `Sidebar` (expanded 240px with "+ New evaluation", "Evaluations", "RECENT" mock list, live Settings link, pinned Help; collapsed 64px tooltip mode, state persisted in `localStorage`), `AppShell` with full-screen layout and 520px slide-out drawer `Sheet`.
    - Authentication & Profile: Firebase JS SDK with environment-driven emulator detection (`initFirebaseAuth`), `AuthContext`, route guard `RequireAuth`, S1/S1b sign-in/sign-up tab switcher with URL synchronization (`/sign-in`, `/sign-up`), email/password registration with display name and `PUT /api/me` profile creation, Google popup sign-in with default role, central `ROLE_LABELS` mapping, and dynamic `Header` user profile rendering.
-   - Mock Data Module: Strongly-typed demo dataset with 4 evaluations, 3 vendors, 8 requirements, 8x3 compliance matrix, cost breakdown with 18% GST, and deterministic scoring (64 / 86 / 58).
+   - Mock Data Module: Strongly-typed demo dataset with 4 evaluations, 3 vendors, 8 requirements, 8x3 compliance matrix, cost breakdown with 18% GST, and deterministic scoring (64 / 86 / 58). (Isolated; not imported by live settings, list, or create/upload pages).
    - Depends on healthy `api`.
 
 ## Startup Sequence & Healthchecks

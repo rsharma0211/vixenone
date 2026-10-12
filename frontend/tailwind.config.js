@@ -15,10 +15,16 @@ export default {
           DEFAULT: 'var(--muted)',
           surface: 'var(--muted-surface)',
         },
+        navy: 'var(--navy)',
+        orange: 'var(--orange)',
+        ring: 'var(--ring)',
         accent: {
           DEFAULT: 'var(--accent)',
           tint: 'var(--accent-tint)',
           hover: 'var(--accent-hover)',
+        },
+        lifecycle: {
+          blue: 'var(--lifecycle-blue)',
         },
         status: {
           compliant: {

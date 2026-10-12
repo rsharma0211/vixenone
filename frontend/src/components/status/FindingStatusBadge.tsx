@@ -1,7 +1,11 @@
 import React from 'react';
 import { Flag } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { FindingStatus } from '@/lib/mockData';
+export type FindingStatus =
+  | 'Compliant'
+  | 'Partially compliant'
+  | 'Non-compliant'
+  | 'Not evidenced';
 
 export interface FindingStatusBadgeProps {
   status: FindingStatus;

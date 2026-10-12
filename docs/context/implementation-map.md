@@ -23,4 +23,10 @@ Statuses: `done` · `partial` · `stub`
 | Document Validator & Storage | Content-based inspection (%PDF- with pdfplumber <= 30 pages, DOCX zip word/document.xml with page extraction) | `backend/app/services/document_validator.py` | `done` | None |
 | Evaluations REST API | Endpoints for evaluation CRUD, document management, atomic requirements update with stale transition, latest job, and dynamic scoring results with KPI counts | `backend/app/api/evaluations.py`, `backend/app/services/evaluation_service.py` | `done` | None |
 | Full Demo Seed Dataset | Idempotent demo dataset mirroring frontend mock module (4 evaluations, 3 vendors, 8 requirements, 24 findings, raw scores, costs, 4 open clarifications) | `backend/app/services/seed_demo.py`, `scripts/seed.py` | `done` | None |
+| Theme Tokens & Brand Identity | Navy #142B45 and Orange #FF7A1A tokens, zero indigo, mark and wordmark static assets, favicon, taglines removed | `frontend/src/index.css`, `frontend/tailwind.config.js`, `frontend/public/` | `done` | None |
+| Typed API Client & OpenAPI Types | Typed API client wrapping all endpoints, openapi-typescript generated types, 422 validation error mapping | `frontend/src/lib/api/client.ts`, `frontend/src/lib/types/` | `done` | None |
+| Criteria Settings Page | Single card table for built-in and custom evaluation criteria, inline validation, live weight sum=100, reset defaults, unsaved changes guard | `frontend/src/pages/SettingsPage.tsx` | `done` | None |
+| Evaluations List Page (S2) | Live API dashboard with 4 KPI filter tiles, search, status filter, row separators, lifecycle dot+text, row navigation, empty/loading/error states | `frontend/src/pages/EvaluationsListPage.tsx` | `done` | None |
+| Create & Upload Page (S3) | Evaluation creation (2-3 vendors), upload slots (requirements + proposals), client pre-validation (PDF/DOCX <= 10MB), server error banner display matching S3-error | `frontend/src/pages/NewEvaluationPage.tsx` | `done` | Document extraction trigger in future phase |
+
 

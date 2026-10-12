@@ -1,13 +1,32 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { NavLink, Outlet, useParams, Link } from 'react-router-dom';
 import { mockEvaluations } from '@/lib/mockData';
+import { apiClient } from '@/lib/api/client';
 import { cn } from '@/lib/utils';
 
 export const EvaluationLayout: React.FC = () => {
   const { id } = useParams<{ id: string }>();
 
-  const evaluation =
-    mockEvaluations.find((ev) => ev.id === id) || mockEvaluations[0];
+  const [evaluation, setEvaluation] = useState(() =>
+    mockEvaluations.find((ev) => ev.id === id) || mockEvaluations[0]
+  );
+
+  useEffect(() => {
+    if (id) {
+      apiClient.getEvaluation(id)
+        .then((detail) => {
+          setEvaluation((prev) => ({
+            ...prev,
+            id: detail.id,
+            name: detail.title,
+            name_short: detail.title.split('—')[0]?.trim() || detail.title,
+            contract_type: detail.category,
+            total_requirements: detail.requirements_count,
+          }));
+        })
+        .catch(() => {});
+    }
+  }, [id]);
 
   const tabs = [
     { name: 'Requirements', path: `/evaluations/${evaluation.id}/requirements` },
@@ -50,7 +69,7 @@ export const EvaluationLayout: React.FC = () => {
               cn(
                 "pb-3 text-sm font-medium transition-colors border-b-2 -mb-px",
                 isActive
-                  ? "border-accent text-accent"
+                  ? "border-accent text-navy font-semibold"
                   : "border-transparent text-muted hover:text-text"
               )
             }

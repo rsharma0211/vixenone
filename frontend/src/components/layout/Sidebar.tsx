@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { List, Plus, Settings, HelpCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -10,7 +10,8 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
-import { mockEvaluations } from '@/lib/mockData';
+import { apiClient } from '@/lib/api/client';
+import type { EvaluationSummaryResponse } from '@/lib/types';
 
 interface SidebarProps {
   collapsed: boolean;
@@ -20,8 +21,23 @@ export const Sidebar: React.FC<SidebarProps> = ({ collapsed }) => {
   const location = useLocation();
   const navigate = useNavigate();
 
-  // Find recent evaluations (first 3 from mockData)
-  const recentEvaluations = mockEvaluations.slice(0, 3);
+  const [recentEvaluations, setRecentEvaluations] = useState<EvaluationSummaryResponse[]>([]);
+
+  useEffect(() => {
+    let isMounted = true;
+    apiClient.listEvaluations()
+      .then((data) => {
+        if (isMounted && data.evaluations) {
+          setRecentEvaluations(data.evaluations.slice(0, 3));
+        }
+      })
+      .catch(() => {
+        // Silently ignore sidebar recent fetch errors
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, [location.pathname]);
 
   // Check if current route is an evaluation and which one
   const match = location.pathname.match(/\/evaluations\/([^/]+)/);
@@ -29,7 +45,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ collapsed }) => {
 
   const isEvaluationsActive =
     location.pathname === '/evaluations' ||
-    location.pathname.startsWith('/evaluations/');
+    (location.pathname.startsWith('/evaluations/') && !location.pathname.startsWith('/evaluations/new'));
+
+  const isSettingsActive = location.pathname === '/settings';
 
   return (
     <TooltipProvider delayDuration={200}>
@@ -48,7 +66,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ collapsed }) => {
                 <button
                   type="button"
                   onClick={() => navigate('/evaluations/new')}
-                  className="w-10 h-10 mx-auto rounded-lg bg-accent text-white flex items-center justify-center hover:bg-accent-hover transition-colors shadow-sm focus:outline-none focus:ring-2 focus:ring-accent"
+                  className="w-10 h-10 mx-auto rounded-lg bg-accent text-navy font-semibold flex items-center justify-center hover:bg-accent-hover transition-colors shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
                 >
                   <Plus className="w-5 h-5 stroke-[2.5]" />
                 </button>
@@ -59,7 +77,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ collapsed }) => {
             <Button
               variant="primary"
               onClick={() => navigate('/evaluations/new')}
-              className="w-full justify-center gap-1.5 font-medium"
+              className="w-full justify-center gap-1.5 font-semibold"
             >
               <Plus className="w-4 h-4 stroke-[2.5]" />
               <span>New evaluation</span>
@@ -76,7 +94,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ collapsed }) => {
                     className={cn(
                       "w-10 h-10 mx-auto rounded-lg flex items-center justify-center transition-colors",
                       isEvaluationsActive
-                        ? "bg-accent-tint text-accent"
+                        ? "bg-muted-surface text-navy font-semibold"
                         : "text-muted hover:bg-surface hover:text-text"
                     )}
                   >
@@ -91,7 +109,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ collapsed }) => {
                 className={cn(
                   "flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors",
                   isEvaluationsActive
-                    ? "bg-accent-tint text-accent font-medium"
+                    ? "bg-muted-surface text-navy font-semibold"
                     : "text-text hover:bg-background"
                 )}
               >
@@ -102,7 +120,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ collapsed }) => {
           </nav>
 
           {/* RECENT Section (Expanded only) */}
-          {!collapsed && (
+          {!collapsed && recentEvaluations.length > 0 && (
             <div className="pt-2 space-y-1.5">
               <div className="px-3 text-xs font-medium text-muted uppercase tracking-wider">
                 Recent
@@ -118,17 +136,23 @@ export const Sidebar: React.FC<SidebarProps> = ({ collapsed }) => {
                       key={ev.id}
                       type="button"
                       onClick={() =>
-                        navigate(`/evaluations/${ev.id}/requirements`)
+                        navigate(
+                          ev.status === 'draft'
+                            ? `/evaluations/${ev.id}/upload`
+                            : ev.status === 'requirements_review'
+                            ? `/evaluations/${ev.id}/requirements`
+                            : `/evaluations/${ev.id}/comparison`
+                        )
                       }
-                      title={ev.name}
+                      title={ev.title || ev.name}
                       className={cn(
                         "w-full text-left px-3 py-1.5 rounded-md text-xs truncate transition-colors block",
                         isOpen
-                          ? "text-accent font-medium bg-background"
+                          ? "text-navy font-semibold bg-background"
                           : "text-text hover:bg-background/80"
                       )}
                     >
-                      {ev.name_short}
+                      {ev.name_short || ev.title || ev.name}
                     </button>
                   );
                 })}
@@ -145,13 +169,18 @@ export const Sidebar: React.FC<SidebarProps> = ({ collapsed }) => {
               <>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <button
-                      type="button"
+                    <NavLink
+                      to="/settings"
                       aria-label="Settings"
-                      className="w-10 h-10 mx-auto rounded-lg flex items-center justify-center text-muted hover:bg-background hover:text-text transition-colors"
+                      className={cn(
+                        "w-10 h-10 mx-auto rounded-lg flex items-center justify-center transition-colors",
+                        isSettingsActive
+                          ? "bg-muted-surface text-navy font-semibold"
+                          : "text-muted hover:bg-background hover:text-text"
+                      )}
                     >
                       <Settings className="w-5 h-5" />
-                    </button>
+                    </NavLink>
                   </TooltipTrigger>
                   <TooltipContent side="right">Settings</TooltipContent>
                 </Tooltip>
@@ -171,13 +200,18 @@ export const Sidebar: React.FC<SidebarProps> = ({ collapsed }) => {
               </>
             ) : (
               <>
-                <button
-                  type="button"
-                  className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-muted hover:bg-background hover:text-text transition-colors"
+                <NavLink
+                  to="/settings"
+                  className={cn(
+                    "w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors",
+                    isSettingsActive
+                      ? "bg-muted-surface text-navy font-semibold"
+                      : "text-muted hover:bg-background hover:text-text"
+                  )}
                 >
                   <Settings className="w-4 h-4" />
                   <span>Settings</span>
-                </button>
+                </NavLink>
                 <button
                   type="button"
                   className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-muted hover:bg-background hover:text-text transition-colors"

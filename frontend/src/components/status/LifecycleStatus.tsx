@@ -1,7 +1,14 @@
 import React from 'react';
 import { RefreshCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { LifecycleStatusType } from '@/lib/mockData';
+export type LifecycleStatusType =
+  | 'Draft'
+  | 'Requirements review'
+  | 'Analysed'
+  | 'Stale'
+  | 'Ready'
+  | 'Processing'
+  | 'Error';
 
 export interface LifecycleStatusProps {
   status: LifecycleStatusType;
@@ -29,11 +36,11 @@ export const LifecycleStatus: React.FC<LifecycleStatusProps> = ({
 
   const dotColors: Record<LifecycleStatusType, string> = {
     'Draft': 'bg-muted',
-    'Requirements review': 'bg-accent',
+    'Requirements review': 'bg-lifecycle-blue',
     'Analysed': 'bg-status-compliant-text',
     'Stale': 'bg-status-partial-text',
     'Ready': 'bg-status-compliant-text',
-    'Processing': 'bg-accent',
+    'Processing': 'bg-lifecycle-blue',
     'Error': 'bg-status-noncompliant-text',
   };
 
