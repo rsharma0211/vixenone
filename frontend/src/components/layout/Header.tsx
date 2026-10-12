@@ -41,9 +41,8 @@ export const Header: React.FC<HeaderProps> = ({ onToggleSidebar }) => {
           <PanelLeft className="w-5 h-5 text-muted hover:text-text" />
         </button>
 
-        <div className="flex items-center gap-1.5 select-none">
-          <img src="/mark.png" alt="VixenOne mark" className="h-7 w-7 object-contain" />
-          <img src="/wordmark.png" alt="VixenOne" className="h-5.5 object-contain" />
+        <div className="flex items-center select-none">
+          <img src="/logo.png" alt="VixenOne" className="h-8 w-auto max-w-full object-contain" />
         </div>
       </div>
 
@@ -69,7 +68,10 @@ export const Header: React.FC<HeaderProps> = ({ onToggleSidebar }) => {
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-48">
-            <DropdownMenuItem className="cursor-pointer gap-2">
+            <DropdownMenuItem
+              onClick={() => navigate('/profile')}
+              className="cursor-pointer gap-2"
+            >
               <UserIcon className="w-4 h-4 text-muted" />
               <span>Profile</span>
             </DropdownMenuItem>

@@ -4,11 +4,12 @@ import { RequireAuth } from '@/components/auth/RequireAuth';
 import { AppShell } from '@/components/layout/AppShell';
 import { EvaluationLayout } from '@/components/layout/EvaluationLayout';
 import { LandingPage } from '@/pages/LandingPage';
-import { S1 } from '@/pages/S1';
+import { AuthPage } from '@/pages/AuthPage';
 import { DevComponentsPage } from '@/pages/DevComponentsPage';
 import { EvaluationsListPage } from '@/pages/EvaluationsListPage';
 import { NewEvaluationPage } from '@/pages/NewEvaluationPage';
 import { SettingsPage } from '@/pages/SettingsPage';
+import { ProfilePage } from '@/pages/ProfilePage';
 import { EvaluationTabPlaceholder } from '@/pages/EvaluationTabPlaceholder';
 
 const router = createBrowserRouter([
@@ -18,11 +19,11 @@ const router = createBrowserRouter([
   },
   {
     path: '/sign-in',
-    element: <S1 />,
+    element: <AuthPage />,
   },
   {
     path: '/sign-up',
-    element: <S1 />,
+    element: <AuthPage />,
   },
   {
     element: (
@@ -46,6 +47,10 @@ const router = createBrowserRouter([
       {
         path: '/settings',
         element: <SettingsPage />,
+      },
+      {
+        path: '/profile',
+        element: <ProfilePage />,
       },
       {
         path: '/dev/components',

@@ -219,6 +219,9 @@ Every task ends with `make test` passing. Tasks touching schemas also run `make 
 - Every data view handles four states: loading, empty, error, success.
 - Status and risk values render from the exact enum values above. One colour per status, defined once.
 
+### Naming
+- Name files and components by function; design screen IDs only in comments.
+
 ### Config and secrets
 - All config via environment variables, documented in `.env.example`.
 - Never commit secrets, keys, tokens, or real `.env` files.

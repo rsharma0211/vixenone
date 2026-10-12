@@ -13,7 +13,8 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 
-export const S1: React.FC = () => {
+// Screen S1/S1b: Authentication (Sign in / Sign up)
+export const AuthPage: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, loading: authLoading, signInWithEmail, signUpWithEmail, signInWithGoogle } = useAuth();
@@ -165,9 +166,8 @@ export const S1: React.FC = () => {
       {/* Main card */}
       <div className="w-[400px] max-w-full rounded-lg border border-border bg-background p-8 space-y-6">
         {/* Brand Header */}
-        <div className="flex items-center justify-center gap-2 select-none">
-          <img src="/mark.png" alt="VixenOne mark" className="h-8 w-8 object-contain" />
-          <img src="/wordmark.png" alt="VixenOne" className="h-6 object-contain" />
+        <div className="flex items-center justify-center select-none">
+          <img src="/logo.png" alt="VixenOne" className="h-10 w-auto max-w-full object-contain" />
         </div>
 
         {/* Tab switcher: Sign in · Sign up */}
@@ -450,4 +450,4 @@ export const S1: React.FC = () => {
   );
 };
 
-export default S1;
+export default AuthPage;

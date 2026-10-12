@@ -22,4 +22,5 @@ Append-only record of architectural and implementation decisions. Format: `YYYY-
 - 2026-10-12 — Phase 2 brand design tokens: Navy #142B45 and Orange #FF7A1A with zero indigo — Establish high-contrast brand palette with navy button text on orange, isolating status pill colours from brand orange.
 - 2026-10-12 — Switch App router to React Router Data Router (createBrowserRouter) — Enable useBlocker hook for unsaved changes protection on criteria settings without third-party packages.
 - 2026-10-12 — OpenAPI-generated types and typed ApiClient with 422 error mapper — Enforce end-to-end schema consistency from FastAPI Pydantic models to React forms and map field-level 422 errors directly to form inputs.
+- 2026-10-12 — Single full logo and rename frontend components by function — Consolidate branding to single tagline-free full logo with fixed height constraints, eliminate wordmark, rename screen-ID components to functional names (AuthPage), introduce ProfilePage with live header profile synchronization, and pin openapi-typescript dev dependency.
 

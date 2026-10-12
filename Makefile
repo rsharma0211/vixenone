@@ -46,7 +46,7 @@ test:
 	fi
 
 types:
-	docker compose exec -T web npx --yes openapi-typescript http://api:8000/api/openapi.json -o src/lib/types/schema.ts
+	docker compose exec -T web npx --no-install openapi-typescript http://api:8000/api/openapi.json -o src/lib/types/schema.ts
 
 lint:
 	@echo "Linting backend and frontend..."

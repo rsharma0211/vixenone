@@ -219,14 +219,13 @@ export const LandingPage: React.FC = () => {
       {/* 1. STICKY HEADER */}
       <header className="sticky top-0 z-50 h-16 w-full border-b border-border bg-background">
         <div className="max-w-7xl mx-auto h-full px-4 sm:px-6 lg:px-8 flex items-center justify-between">
-          {/* Logo with mark + wordmark */}
+          {/* Logo */}
           <Link
             to="/"
             onClick={() => window.scrollTo({ top: 0, behavior: prefersReducedMotion ? 'auto' : 'smooth' })}
-            className="flex items-center gap-1.5 select-none focus:outline-none"
+            className="flex items-center select-none focus:outline-none"
           >
-            <img src="/mark.png" alt="VixenOne mark" className="h-8 w-8 object-contain" />
-            <img src="/wordmark.png" alt="VixenOne" className="h-6 object-contain" />
+            <img src="/logo.png" alt="VixenOne" className="h-10 w-auto max-w-full object-contain" />
           </Link>
 
           {/* Centre links */}
@@ -802,9 +801,8 @@ export const LandingPage: React.FC = () => {
       {/* 9. FOOTER */}
       <footer className="border-t border-border bg-background py-8">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between">
-          <div className="flex items-center gap-1.5 select-none">
-            <img src="/mark.png" alt="VixenOne mark" className="h-6 w-6 object-contain" />
-            <img src="/wordmark.png" alt="VixenOne" className="h-4.5 object-contain" />
+          <div className="flex items-center select-none">
+            <img src="/logo.png" alt="VixenOne" className="h-10 w-auto max-w-full object-contain" />
           </div>
           <p className="text-xs text-muted">
             Prototype · AI Builder Cup 2026
