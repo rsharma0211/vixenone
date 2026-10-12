@@ -18,6 +18,7 @@ htmlcov/
 venv/
 env/
 
+
 # Environment files
 .env
 .env.local
@@ -30,9 +31,19 @@ env/
 # Firebase & Emulators
 .firebase/
 firebase-debug.log*
-firestore-debug.log*
 ui-debug.log*
 emulator-data/
+firebase_auth.json
+
+# Firebase Admin SDK & Service Account Keys
+*service*account*.json
+*service_account*.json
+*serviceAccount*.json
+*firebase*admin*.json
+*firebase-adminsdk*.json
+service-account.json
+serviceAccountKey.json
+credentials.json
 
 # Uploads & Database
 uploads/

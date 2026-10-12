@@ -43,7 +43,8 @@ The local development stack consists of four Docker containers on a shared bridg
    - Listens on `8000`.
    - Data layer: SQLAlchemy 2 (async engine via `psycopg` 3) with shared session provider.
    - Migrations: Alembic with baseline migration (`0001_baseline`), applied automatically on container startup.
-   - Auth layer: Firebase Admin SDK validating Bearer tokens against `firebase-auth-emulator:9099`.
+   - Auth layer: Firebase Admin SDK validating Bearer tokens; environment-driven initialization (emulator mode when FIREBASE_AUTH_EMULATOR_HOST is set, Application Default Credentials ADC when absent; fails fast in production if emulator is set).
+   - AI settings: GEMINI_API_KEY (SecretStr) and GEMINI_MODEL (default gemini-3.6-flash) wired to configuration.
    - Storage layer: Swappable storage interface (`StorageService`) with local disk implementation (`LocalStorageService`) writing to `./uploads`.
    - Endpoints:
      - `GET /health`: Public, returns `{"status": "ok", "db": "ok"}`.

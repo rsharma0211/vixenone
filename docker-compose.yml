@@ -43,7 +43,9 @@ services:
       retries: 10
       start_period: 5s
     networks:
-      - vixenone-net
+      vixenone-net:
+        aliases:
+          - firebase-emulators
 
   api:
     build:
@@ -57,12 +59,15 @@ services:
       - ./uploads:/app/uploads
     environment:
       - PROJECT_NAME=${PROJECT_NAME:-VixenOne}
+      - ENV=${ENV:-development}
       - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:5173}
       - DATABASE_URL=${DATABASE_URL:-postgresql+psycopg://vixenone:vixenone@postgres:5432/vixenone}
       - FIREBASE_PROJECT_ID=${PROJECT_ID:-demo-vixenone}
       - FIREBASE_AUTH_EMULATOR_HOST=${FIREBASE_AUTH_EMULATOR_HOST:-firebase-auth-emulator:9099}
       - STORAGE_BACKEND=${STORAGE_BACKEND:-local}
       - UPLOAD_DIR=/app/uploads
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - GEMINI_MODEL=${GEMINI_MODEL:-gemini-3.6-flash}
     healthcheck:
       test: ["CMD-SHELL", "curl -f -s http://localhost:8000/health || exit 1"]
       interval: 5s

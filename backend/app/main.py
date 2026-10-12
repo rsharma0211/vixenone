@@ -1,14 +1,24 @@
+from contextlib import asynccontextmanager
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.core.auth import AuthenticatedUser, get_current_user
+from app.core.auth import AuthenticatedUser, get_current_user, init_firebase
 from app.core.config import settings
 from app.core.database import check_db_health
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Initialize Firebase Admin on startup (fails fast if production + emulator)
+    init_firebase(settings)
+    yield
+
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
     openapi_url="/api/openapi.json",
     docs_url="/api/docs",
+    lifespan=lifespan,
 )
 
 # CORS configuration allowing web origin only

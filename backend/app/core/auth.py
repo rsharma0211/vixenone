@@ -1,4 +1,4 @@
-import os
+import logging
 from typing import Optional
 import firebase_admin
 from firebase_admin import auth
@@ -6,19 +6,31 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel
 
-from app.core.config import settings
+from app.core.config import Settings, settings
 
-# Point Firebase Admin SDK to the Auth emulator
-if settings.FIREBASE_AUTH_EMULATOR_HOST:
-    os.environ["FIREBASE_AUTH_EMULATOR_HOST"] = settings.FIREBASE_AUTH_EMULATOR_HOST
+logger = logging.getLogger("uvicorn.error")
 
-# Initialize Firebase Admin app once
-try:
-    firebase_app = firebase_admin.get_app()
-except ValueError:
-    firebase_app = firebase_admin.initialize_app(
-        options={"projectId": settings.FIREBASE_PROJECT_ID}
-    )
+
+def init_firebase(app_settings: Optional[Settings] = None) -> firebase_admin.App:
+    """Initialize Firebase Admin SDK based on environment configuration.
+
+    - Emulator mode: if FIREBASE_AUTH_EMULATOR_HOST is configured.
+    - ADC mode: if absent, uses Application Default Credentials (no credentials argument).
+    - Fails fast if environment is production and emulator host is set.
+    """
+    cfg = app_settings or settings
+    if cfg.is_production and cfg.FIREBASE_AUTH_EMULATOR_HOST:
+        raise ValueError("Firebase Auth emulator cannot be used in production environment")
+
+    mode = "emulator" if cfg.FIREBASE_AUTH_EMULATOR_HOST else "ADC"
+    logger.info("Firebase Admin initialized in %s mode (project: %s)", mode, cfg.FIREBASE_PROJECT_ID)
+
+    try:
+        return firebase_admin.get_app()
+    except ValueError:
+        return firebase_admin.initialize_app(
+            options={"projectId": cfg.FIREBASE_PROJECT_ID}
+        )
 
 
 class AuthenticatedUser(BaseModel):
@@ -39,6 +51,11 @@ def get_current_user(
             detail="Missing authentication credentials",
             headers={"WWW-Authenticate": "Bearer"},
         )
+
+    try:
+        firebase_admin.get_app()
+    except ValueError:
+        init_firebase()
 
     token = credentials.credentials
     try:
