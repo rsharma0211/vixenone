@@ -1,0 +1,51 @@
+# OS
+.DS_Store
+Thumbs.db
+
+# Dependencies
+node_modules/
+.npm/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.coverage
+htmlcov/
+*.egg-info/
+.venv/
+venv/
+env/
+
+# Environment files
+.env
+.env.local
+.env.*.local
+*.env
+!.env.example
+!backend/.env.example
+!frontend/.env.example
+
+# Firebase & Emulators
+.firebase/
+firebase-debug.log*
+firestore-debug.log*
+ui-debug.log*
+emulator-data/
+
+# Uploads & Database
+uploads/
+*.sql
+*.dump
+
+# Build artifacts
+dist/
+build/
+*.tsbuildinfo
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo

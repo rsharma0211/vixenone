@@ -1,0 +1,105 @@
+name: vixenone
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: vixenone-postgres
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-vixenone}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-vixenone}
+      - POSTGRES_DB=${POSTGRES_DB:-vixenone}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-vixenone} -d ${POSTGRES_DB:-vixenone}"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+      start_period: 3s
+    networks:
+      - vixenone-net
+
+  firebase-auth-emulator:
+    build:
+      context: .
+      dockerfile: infra/docker/firebase/Dockerfile
+    container_name: vixenone-firebase-auth
+    ports:
+      - "4000:4000"   # Emulator Suite UI
+      - "9099:9099"   # Auth Emulator
+      - "4400:4400"   # Emulator Hub
+    volumes:
+      - ./emulator-data:/emulator-data
+      - ./firebase.json:/firebase/firebase.json:ro
+    environment:
+      - FIREBASE_PROJECT_ID=${PROJECT_ID:-demo-vixenone}
+    stop_grace_period: 30s
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f -s http://localhost:4000 >/dev/null && curl -f -s http://localhost:9099 >/dev/null || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+    networks:
+      - vixenone-net
+
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: vixenone-api
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+      - ./uploads:/app/uploads
+    environment:
+      - PROJECT_NAME=${PROJECT_NAME:-VixenOne}
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:5173}
+      - DATABASE_URL=${DATABASE_URL:-postgresql+psycopg://vixenone:vixenone@postgres:5432/vixenone}
+      - FIREBASE_PROJECT_ID=${PROJECT_ID:-demo-vixenone}
+      - FIREBASE_AUTH_EMULATOR_HOST=${FIREBASE_AUTH_EMULATOR_HOST:-firebase-auth-emulator:9099}
+      - STORAGE_BACKEND=${STORAGE_BACKEND:-local}
+      - UPLOAD_DIR=/app/uploads
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f -s http://localhost:8000/health || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    depends_on:
+      postgres:
+        condition: service_healthy
+      firebase-auth-emulator:
+        condition: service_healthy
+    networks:
+      - vixenone-net
+
+  web:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: vixenone-web
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    environment:
+      - VITE_API_BASE_URL=${VITE_API_BASE_URL:-http://localhost:8000}
+      - VITE_FIREBASE_PROJECT_ID=${PROJECT_ID:-demo-vixenone}
+      - VITE_FIREBASE_AUTH_EMULATOR_HOST=${VITE_FIREBASE_AUTH_EMULATOR_HOST:-localhost:9099}
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - vixenone-net
+
+volumes:
+  postgres_data:
+
+networks:
+  vixenone-net:
+    driver: bridge
