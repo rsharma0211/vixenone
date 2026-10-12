@@ -42,15 +42,14 @@ export const NewEvaluationPage: React.FC = () => {
   const [pageError, setPageError] = useState<string | null>(null);
 
   // Form details
-  const [title, setTitle] = useState<string>('Housekeeping Services — Andheri East Office, FY 2026–27');
-  const [category, setCategory] = useState<string>(CATEGORY_OPTIONS[0]);
-  const [location, setLocation] = useState<string>('Mumbai');
+  const [title, setTitle] = useState<string>('');
+  const [category, setCategory] = useState<string>('');
+  const [location, setLocation] = useState<string>('');
 
   // Vendor state (for creation or loaded evaluation)
   const [vendors, setVendors] = useState<{ id?: string; name: string }[]>([
-    { name: 'BrightNest Facility Services' },
-    { name: 'Shubh Housekeeping Pvt Ltd' },
-    { name: 'UrbanKleen Services' },
+    { name: '' },
+    { name: '' },
   ]);
 
   // Documents state for loaded evaluation
@@ -95,6 +94,15 @@ export const NewEvaluationPage: React.FC = () => {
   useEffect(() => {
     if (routeEvalId) {
       loadEvaluation(routeEvalId);
+    } else {
+      setEvaluationId(null);
+      setTitle('');
+      setCategory('');
+      setLocation('');
+      setVendors([{ name: '' }, { name: '' }]);
+      setDocuments([]);
+      setSlotErrors({});
+      setFieldErrors({});
     }
   }, [routeEvalId, loadEvaluation]);
 
@@ -124,6 +132,9 @@ export const NewEvaluationPage: React.FC = () => {
     const errors: Record<string, string> = {};
     if (!title.trim()) {
       errors.title = 'Evaluation name is required';
+    }
+    if (!category.trim()) {
+      errors.category = 'Category is required';
     }
     const cleanVendors = vendors.map((v) => v.name.trim()).filter(Boolean);
     if (cleanVendors.length < 2 || cleanVendors.length > 3) {
@@ -312,6 +323,13 @@ export const NewEvaluationPage: React.FC = () => {
     );
   }
 
+  // Validation for Create button
+  const isTitleFilled = Boolean(title.trim());
+  const isCategoryFilled = Boolean(category.trim());
+  const filledVendorsCount = vendors.filter((v) => Boolean(v.name.trim())).length;
+  const isCreateDisabled =
+    creating || !isTitleFilled || !isCategoryFilled || filledVendorsCount < 2;
+
   return (
     <div className="space-y-6 text-left max-w-[880px]">
       {/* Breadcrumb & Title */}
@@ -353,7 +371,7 @@ export const NewEvaluationPage: React.FC = () => {
               setTitle(e.target.value);
               setFieldErrors((prev) => ({ ...prev, title: '' }));
             }}
-            placeholder="e.g. Housekeeping Services — Andheri East Office, FY 2026–27"
+            placeholder="e.g. Housekeeping Services — Andheri East"
             className={fieldErrors.title ? 'border-status-noncompliant-text' : ''}
             disabled={Boolean(evaluationId)}
           />
@@ -370,16 +388,27 @@ export const NewEvaluationPage: React.FC = () => {
             <select
               id="eval-category"
               value={category}
-              onChange={(e) => setCategory(e.target.value)}
+              onChange={(e) => {
+                setCategory(e.target.value);
+                setFieldErrors((prev) => ({ ...prev, category: '' }));
+              }}
               disabled={Boolean(evaluationId)}
-              className="flex h-9 w-full rounded-lg border border-border bg-background px-3 py-1 text-sm text-text focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring focus-visible:border-ring disabled:opacity-60"
+              className={`flex h-9 w-full rounded-lg border bg-background px-3 py-1 text-sm text-text focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring focus-visible:border-ring disabled:opacity-60 ${
+                fieldErrors.category ? 'border-status-noncompliant-text' : 'border-border'
+              }`}
             >
+              <option value="" disabled>
+                Select category
+              </option>
               {CATEGORY_OPTIONS.map((cat) => (
                 <option key={cat} value={cat}>
                   {cat}
                 </option>
               ))}
             </select>
+            {fieldErrors.category && (
+              <p className="text-xs text-status-noncompliant-text">{fieldErrors.category}</p>
+            )}
           </div>
 
           <div className="space-y-1.5">
@@ -405,7 +434,7 @@ export const NewEvaluationPage: React.FC = () => {
             <Button
               variant="primary"
               onClick={handleCreateEvaluation}
-              disabled={creating}
+              disabled={isCreateDisabled}
               className="font-semibold"
             >
               {creating ? 'Creating...' : 'Create & upload documents'}
@@ -576,7 +605,7 @@ export const NewEvaluationPage: React.FC = () => {
                     <Input
                       value={vendor.name}
                       onChange={(e) => handleVendorNameChange(idx, e.target.value)}
-                      placeholder={`Vendor ${idx + 1} name`}
+                      placeholder="Vendor name"
                       disabled={Boolean(evaluationId)}
                       className="h-9"
                     />
