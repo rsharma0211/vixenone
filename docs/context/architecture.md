@@ -62,8 +62,7 @@ The local development stack consists of four Docker containers on a shared bridg
    - Status components: `FindingStatusBadge`, `LifecycleStatus`, `RiskBadge`, `MandatoryTag` in `frontend/src/components/status/`.
    - Landing Page: Public root route `/` rendering responsive landing page with sticky 64px header, scroll-spy section links, framed hero 3-vendor compliance comparison card, 3-step How It Works, 6-feature grid, Showcase screenshot carousel, Who It's For role carousel, Principle band, FAQ accordion, CTA, and footer.
    - App Shell: `Header` (fixed 56px, wordmark, user dropdown calling `/api/me`), `Sidebar` (expanded 240px with "+ New evaluation", "Evaluations", "RECENT" mock list, pinned Settings/Help; collapsed 64px tooltip mode, state persisted in `localStorage`), `AppShell` with full-screen layout and 520px slide-out drawer `Sheet`.
-   - Evaluation Layout: `EvaluationLayout` with breadcrumbs, title, meta line, and tab routes (`requirements`, `comparison`, `recommendation`).
-   - Authentication: Firebase JS SDK with environment-driven emulator detection (`initFirebaseAuth`), `AuthContext`, route guard `RequireAuth`, and S1/S1b sign-in/sign-up page with email/password and emulator Google popup.
+   - Authentication & Profile: Firebase JS SDK with environment-driven emulator detection (`initFirebaseAuth`), `AuthContext`, route guard `RequireAuth`, S1/S1b sign-in/sign-up tab switcher with URL synchronization (`/sign-in`, `/sign-up`), email/password registration with display name and `PUT /api/me` profile creation, Google popup sign-in with default role, central `ROLE_LABELS` mapping, and dynamic `Header` user profile rendering.
    - Mock Data Module: Strongly-typed demo dataset with 4 evaluations, 3 vendors, 8 requirements, 8x3 compliance matrix, cost breakdown with 18% GST, and deterministic scoring (64 / 86 / 58).
    - Depends on healthy `api`.
 

@@ -1,15 +1,16 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import {
   User,
   onAuthStateChanged,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
-  updateProfile,
+  updateProfile as updateFirebaseProfile,
   signInWithPopup,
   signOut as firebaseSignOut,
 } from 'firebase/auth';
 import { auth, googleProvider, initFirebaseAuth } from '@/lib/firebase';
 import { apiClient, UserProfile } from '@/lib/api/client';
+import { UserRole } from '@/lib/auth/roles';
 
 interface AuthContextValue {
   user: User | null;
@@ -17,9 +18,16 @@ interface AuthContextValue {
   initials: string;
   loading: boolean;
   signInWithEmail: (email: string, pass: string) => Promise<void>;
-  signUpWithEmail: (email: string, pass: string, displayName?: string) => Promise<void>;
+  signUpWithEmail: (
+    email: string,
+    pass: string,
+    displayName: string,
+    role: UserRole
+  ) => Promise<UserProfile>;
   signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
+  refreshProfile: () => Promise<UserProfile | null>;
+  setProfile: React.Dispatch<React.SetStateAction<UserProfile | null>>;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -38,23 +46,31 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
 
+  const fetchProfile = useCallback(async (firebaseUser: User): Promise<UserProfile> => {
+    try {
+      const userProfile = await apiClient.getMe();
+      setProfile(userProfile);
+      return userProfile;
+    } catch {
+      // Fallback to Firebase user info if backend fails momentarily
+      const fallback: UserProfile = {
+        uid: firebaseUser.uid,
+        email: firebaseUser.email || '',
+        display_name: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'User',
+        role: 'facilities_manager',
+      };
+      setProfile(fallback);
+      return fallback;
+    }
+  }, []);
+
   useEffect(() => {
     initFirebaseAuth();
 
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       setUser(firebaseUser);
       if (firebaseUser) {
-        try {
-          const userProfile = await apiClient.getMe();
-          setProfile(userProfile);
-        } catch {
-          // Fallback to Firebase user info if backend fails momentarily
-          setProfile({
-            uid: firebaseUser.uid,
-            email: firebaseUser.email || '',
-            display_name: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'User',
-          });
-        }
+        await fetchProfile(firebaseUser);
       } else {
         setProfile(null);
       }
@@ -62,17 +78,32 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [fetchProfile]);
 
   const signInWithEmail = async (email: string, pass: string) => {
     await signInWithEmailAndPassword(auth, email, pass);
   };
 
-  const signUpWithEmail = async (email: string, pass: string, displayName?: string) => {
-    const cred = await createUserWithEmailAndPassword(auth, email, pass);
-    if (displayName && cred.user) {
-      await updateProfile(cred.user, { displayName });
+  const signUpWithEmail = async (
+    email: string,
+    pass: string,
+    displayName: string,
+    role: UserRole
+  ): Promise<UserProfile> => {
+    let currentUser = auth.currentUser;
+    if (!currentUser || currentUser.email !== email) {
+      const cred = await createUserWithEmailAndPassword(auth, email, pass);
+      currentUser = cred.user;
     }
+    if (displayName && currentUser) {
+      await updateFirebaseProfile(currentUser, { displayName });
+    }
+    const updated = await apiClient.updateMe({
+      display_name: displayName,
+      role: role,
+    });
+    setProfile(updated);
+    return updated;
   };
 
   const signInWithGoogle = async () => {
@@ -83,6 +114,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     await firebaseSignOut(auth);
     setProfile(null);
   };
+
+  const refreshProfile = useCallback(async (): Promise<UserProfile | null> => {
+    if (auth.currentUser) {
+      return await fetchProfile(auth.currentUser);
+    }
+    return null;
+  }, [fetchProfile]);
 
   const initials = getInitials(profile?.display_name || user?.displayName);
 
@@ -97,6 +135,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         signUpWithEmail,
         signInWithGoogle,
         signOut,
+        refreshProfile,
+        setProfile,
       }}
     >
       {children}
@@ -111,3 +151,4 @@ export function useAuth(): AuthContextValue {
   }
   return context;
 }
+

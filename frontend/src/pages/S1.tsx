@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Eye, EyeOff, Loader2 } from 'lucide-react';
 import { useAuth } from '@/lib/auth/AuthContext';
+import { UserRole, ROLE_LABELS, USER_ROLES } from '@/lib/auth/roles';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -15,7 +16,7 @@ import {
 export const S1: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, signInWithEmail, signUpWithEmail, signInWithGoogle } = useAuth();
+  const { user, loading: authLoading, signInWithEmail, signUpWithEmail, signInWithGoogle } = useAuth();
 
   const isInitialSignUp = location.pathname === '/sign-up';
   const [activeTab, setActiveTab] = useState<'sign-in' | 'sign-up'>(
@@ -27,10 +28,10 @@ export const S1: React.FC = () => {
   const [signInPassword, setSignInPassword] = useState('demo1234');
 
   // Sign-up states
-  const [signUpName, setSignUpName] = useState('Priya Sharma');
+  const [signUpName, setSignUpName] = useState('');
   const [signUpEmail, setSignUpEmail] = useState('');
   const [signUpPassword, setSignUpPassword] = useState('');
-  const [role, setRole] = useState('Facilities manager');
+  const [role, setRole] = useState<UserRole>('facilities_manager');
 
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -38,14 +39,18 @@ export const S1: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  // If already authenticated, redirect to destination
-  const from = (location.state as { from?: { pathname: string } })?.from?.pathname || '/evaluations';
+  // Redirect signed-in users visiting /sign-in or /sign-up straight to /evaluations
+  const initialAuthChecked = useRef(false);
 
   useEffect(() => {
-    if (user) {
-      navigate(from, { replace: true });
+    if (authLoading) return;
+    if (!initialAuthChecked.current) {
+      initialAuthChecked.current = true;
+      if (user) {
+        navigate('/evaluations', { replace: true });
+      }
     }
-  }, [user, navigate, from]);
+  }, [user, authLoading, navigate]);
 
   useEffect(() => {
     if (location.pathname === '/sign-up') {
@@ -59,20 +64,27 @@ export const S1: React.FC = () => {
     setActiveTab(tab);
     setError(null);
     if (tab === 'sign-in') {
-      navigate('/sign-in', { replace: true });
+      navigate('/sign-in');
     } else {
-      navigate('/sign-up', { replace: true });
+      navigate('/sign-up');
     }
   };
 
   const handleEmailSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+
+    const trimmedEmail = signInEmail.trim();
+    if (!trimmedEmail || !signInPassword) {
+      setError('Please fill in all required fields.');
+      return;
+    }
+
     setLoading(true);
 
     try {
-      await signInWithEmail(signInEmail, signInPassword);
-      navigate(from, { replace: true });
+      await signInWithEmail(trimmedEmail, signInPassword);
+      navigate('/evaluations', { replace: true });
     } catch (err: any) {
       console.error('[Sign-in Error]', err?.code, err?.message);
       setError(`Invalid email or password (${err?.code || 'auth/error'}). Please try again.`);
@@ -83,19 +95,37 @@ export const S1: React.FC = () => {
 
   const handleEmailSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError(null);
+
+    const trimmedName = signUpName.trim();
+    const trimmedEmail = signUpEmail.trim();
+
+    if (!trimmedName || !trimmedEmail || !signUpPassword) {
+      setError('Please fill in all required fields.');
+      return;
+    }
+
     if (signUpPassword.length < 8) {
       setError('Password must be at least 8 characters.');
       return;
     }
-    setError(null);
+
     setLoading(true);
 
     try {
-      await signUpWithEmail(signUpEmail, signUpPassword, signUpName);
-      navigate(from, { replace: true });
+      await signUpWithEmail(trimmedEmail, signUpPassword, trimmedName, role);
+      navigate('/evaluations', { replace: true });
     } catch (err: any) {
-      console.error('[Sign-up Error]', err?.code, err?.message);
-      setError(`Unable to create account (${err?.code || 'auth/error'}). Please try again.`);
+      console.error('[Sign-up Error]', err);
+      if (err?.code === 'auth/email-already-in-use' || err?.message?.includes('email-already-in-use')) {
+        setError('Email already in use. Please sign in instead.');
+      } else if (err?.code === 'auth/weak-password' || err?.message?.includes('weak-password')) {
+        setError('Password must be at least 8 characters.');
+      } else if (err?.code === 'auth/invalid-email' || err?.message?.includes('invalid-email')) {
+        setError('Please enter a valid work email address.');
+      } else {
+        setError(err?.message || 'Unable to create account. Please try again.');
+      }
     } finally {
       setLoading(false);
     }
@@ -107,7 +137,7 @@ export const S1: React.FC = () => {
 
     try {
       await signInWithGoogle();
-      navigate(from, { replace: true });
+      navigate('/evaluations', { replace: true });
     } catch {
       setError('Google sign-in was cancelled or failed.');
     } finally {
@@ -227,7 +257,7 @@ export const S1: React.FC = () => {
 
         {/* Tab 1: Sign in Form */}
         {activeTab === 'sign-in' ? (
-          <form onSubmit={handleEmailSignIn} className="space-y-4">
+          <form onSubmit={handleEmailSignIn} noValidate className="space-y-4">
             <div className="space-y-1.5 text-left">
               <label
                 htmlFor="email-input"
@@ -241,7 +271,6 @@ export const S1: React.FC = () => {
                 value={signInEmail}
                 onChange={(e) => setSignInEmail(e.target.value)}
                 placeholder="you@company.com"
-                required
                 className="h-9"
               />
             </div>
@@ -268,12 +297,12 @@ export const S1: React.FC = () => {
                   type={showPassword ? 'text' : 'password'}
                   value={signInPassword}
                   onChange={(e) => setSignInPassword(e.target.value)}
-                  required
                   className="h-9 pr-9"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
                   className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted hover:text-text focus:outline-none"
                 >
                   {showPassword ? (
@@ -300,7 +329,7 @@ export const S1: React.FC = () => {
           </form>
         ) : (
           /* Tab 2: Sign up Form */
-          <form onSubmit={handleEmailSignUp} className="space-y-4">
+          <form onSubmit={handleEmailSignUp} noValidate className="space-y-4">
             <div className="space-y-1.5 text-left">
               <label
                 htmlFor="signup-name"
@@ -314,7 +343,6 @@ export const S1: React.FC = () => {
                 value={signUpName}
                 onChange={(e) => setSignUpName(e.target.value)}
                 placeholder="Priya Sharma"
-                required
                 className="h-9"
               />
             </div>
@@ -332,7 +360,6 @@ export const S1: React.FC = () => {
                 value={signUpEmail}
                 onChange={(e) => setSignUpEmail(e.target.value)}
                 placeholder="you@company.com"
-                required
                 className="h-9"
               />
             </div>
@@ -351,12 +378,12 @@ export const S1: React.FC = () => {
                   value={signUpPassword}
                   onChange={(e) => setSignUpPassword(e.target.value)}
                   placeholder=""
-                  required
                   className="h-9 pr-9"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
                   className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted hover:text-text focus:outline-none"
                 >
                   {showPassword ? (
@@ -376,14 +403,16 @@ export const S1: React.FC = () => {
               >
                 Role
               </label>
-              <Select value={role} onValueChange={setRole}>
+              <Select value={role} onValueChange={(val) => setRole(val as UserRole)}>
                 <SelectTrigger id="signup-role" className="h-9">
-                  <SelectValue placeholder="Select role" />
+                  <SelectValue placeholder="Select role">{ROLE_LABELS[role]}</SelectValue>
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="Facilities manager">Facilities manager</SelectItem>
-                  <SelectItem value="Procurement">Procurement</SelectItem>
-                  <SelectItem value="Approver">Approver</SelectItem>
+                  {USER_ROLES.map((roleKey) => (
+                    <SelectItem key={roleKey} value={roleKey}>
+                      {ROLE_LABELS[roleKey]}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>

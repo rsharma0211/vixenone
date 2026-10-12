@@ -14,6 +14,7 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth/AuthContext';
+import { ROLE_LABELS } from '@/lib/auth/roles';
 import { Button } from '@/components/ui/button';
 import {
   Accordion,
@@ -195,17 +196,17 @@ export const LandingPage: React.FC = () => {
   const roleCards = [
     {
       icon: Briefcase,
-      title: 'Facilities manager',
+      title: ROLE_LABELS.facilities_manager,
       description: 'See exactly which services each vendor includes and excludes.',
     },
     {
       icon: Calculator,
-      title: 'Procurement',
+      title: ROLE_LABELS.procurement,
       description: 'Compare true monthly cost, with GST and unknown costs flagged.',
     },
     {
       icon: ShieldCheck,
-      title: 'Approver',
+      title: ROLE_LABELS.approver,
       description: 'One report with the recommendation, mandatory failures and open questions.',
     },
   ];

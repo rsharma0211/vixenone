@@ -2,6 +2,7 @@ import React from 'react';
 import { PanelLeft, ChevronDown, User as UserIcon, LogOut } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/lib/auth/AuthContext';
+import { ROLE_LABELS, UserRole } from '@/lib/auth/roles';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import {
   DropdownMenu,
@@ -16,10 +17,12 @@ interface HeaderProps {
 
 export const Header: React.FC<HeaderProps> = ({ onToggleSidebar }) => {
   const navigate = useNavigate();
-  const { profile, initials, signOut } = useAuth();
+  const { profile, user, initials, signOut } = useAuth();
 
-  const displayName = profile?.display_name || 'Priya Sharma';
-  const role = 'Facilities Manager';
+  const displayName = profile?.display_name || user?.displayName || user?.email?.split('@')[0] || 'User';
+  const roleLabel = profile?.role && profile.role in ROLE_LABELS
+    ? ROLE_LABELS[profile.role as UserRole]
+    : ROLE_LABELS.facilities_manager;
 
   const handleSignOut = async () => {
     await signOut();
@@ -61,7 +64,7 @@ export const Header: React.FC<HeaderProps> = ({ onToggleSidebar }) => {
                   {displayName}
                 </div>
                 <div className="text-[11px] text-muted leading-tight">
-                  {role}
+                  {roleLabel}
                 </div>
               </div>
               <ChevronDown className="w-3.5 h-3.5 text-muted hidden sm:block" />
