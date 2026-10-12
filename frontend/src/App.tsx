@@ -1,49 +1,47 @@
-import { useEffect, useState } from 'react';
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
-
-interface HealthResponse {
-  status: string;
-  db?: string;
-}
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { AuthProvider } from '@/lib/auth/AuthContext';
+import { RequireAuth } from '@/components/auth/RequireAuth';
+import { AppShell } from '@/components/layout/AppShell';
+import { EvaluationLayout } from '@/components/layout/EvaluationLayout';
+import { S1 } from '@/pages/S1';
+import { DevComponentsPage } from '@/pages/DevComponentsPage';
+import { EvaluationsListPage } from '@/pages/EvaluationsListPage';
+import { NewEvaluationPage } from '@/pages/NewEvaluationPage';
+import { EvaluationTabPlaceholder } from '@/pages/EvaluationTabPlaceholder';
 
 export function App() {
-  const [apiStatus, setApiStatus] = useState<string>('checking...');
-  const [dbStatus, setDbStatus] = useState<string>('checking...');
-
-  useEffect(() => {
-    let isMounted = true;
-
-    fetch(`${API_BASE_URL}/health`)
-      .then((res) => {
-        if (!res.ok) {
-          throw new Error('Health check response not OK');
-        }
-        return res.json() as Promise<HealthResponse>;
-      })
-      .then((data) => {
-        if (isMounted) {
-          setApiStatus(data.status === 'ok' ? 'ok' : 'unreachable');
-          setDbStatus(data.db === 'ok' ? 'ok' : data.db || 'unreachable');
-        }
-      })
-      .catch(() => {
-        if (isMounted) {
-          setApiStatus('unreachable');
-          setDbStatus('unreachable');
-        }
-      });
-
-    return () => {
-      isMounted = false;
-    };
-  }, []);
-
   return (
-    <div>
-      <h1>VixenOne</h1>
-      <p>API: {apiStatus} · DB: {dbStatus}</p>
-    </div>
+    <AuthProvider>
+      <BrowserRouter>
+        <Routes>
+          {/* Public Authentication Route */}
+          <Route path="/sign-in" element={<S1 />} />
+
+          {/* Protected Application Routes */}
+          <Route
+            element={
+              <RequireAuth>
+                <AppShell />
+              </RequireAuth>
+            }
+          >
+            <Route path="/evaluations" element={<EvaluationsListPage />} />
+            <Route path="/evaluations/new" element={<NewEvaluationPage />} />
+            <Route path="/dev/components" element={<DevComponentsPage />} />
+
+            <Route path="/evaluations/:id" element={<EvaluationLayout />}>
+              <Route index element={<Navigate to="requirements" replace />} />
+              <Route path="requirements" element={<EvaluationTabPlaceholder />} />
+              <Route path="comparison" element={<EvaluationTabPlaceholder />} />
+              <Route path="recommendation" element={<EvaluationTabPlaceholder />} />
+            </Route>
+
+            <Route path="/" element={<Navigate to="/evaluations" replace />} />
+            <Route path="*" element={<Navigate to="/evaluations" replace />} />
+          </Route>
+        </Routes>
+      </BrowserRouter>
+    </AuthProvider>
   );
 }
 

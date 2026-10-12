@@ -311,3 +311,42 @@ Footer: muted "Page 1 of 4". 11pt body, compact spacing, thin borders, no colour
 
 ### Mandatory tags (5 of the 8 sample rows)
 REQ-01, REQ-02, REQ-03, REQ-05, REQ-08 carry the "Mandatory" tag everywhere: matrix, print summary, requirements table. The 6th mandatory requirement is among the 10 rows not shown.
+
+---
+
+## 6. Additions (approved 12 Oct, after first freeze)
+
+| ID | Screen | Status | Build notes |
+| --- | --- | --- | --- |
+| L0 | Public landing page | Approved | Hero preview must show 3 vendors (Stitch shows BrightNest only) |
+| S1 | Auth — Sign in tab | Derived | S1 card + tabs row "Sign in (active) · Sign up" |
+| S1b | Auth — Sign up tab | Approved | Google; Full name; Work email; Password (≥8 hint); Role select; Create account |
+| S2 | Evaluations list + KPI tiles | Approved (replaces old S2) | Row separators on every row |
+
+### Landing (L0)
+- Sticky header: wordmark · How it works · Features · Showcase · Who it's for · FAQ · "Sign in" link · "Sign up" button. Links smooth-scroll; active section highlighted. Signed-in visitor sees "Open app".
+- Sections: Hero → How it works (3 steps) → Features (6) → Showcase carousel (S4, S5, S6, S7 screenshots) → Who it's for carousel (3 roles) → Principle band (dark) → FAQ (5) → CTA → footer.
+- No testimonials, no client logos, no pricing (decision: no invented reviews).
+- Motion: fade/slide on scroll, carousel transitions, smooth scroll, subtle hover; honour reduced-motion.
+- Hero preview rows: REQ-01 C/C/Needs review · REQ-02 C/C/Partial · REQ-03 Non-compliant/C/Not evidenced · REQ-07 Partial/C/C.
+
+### FAQ answers
+1. Which documents can I upload? — PDF or Word, up to 10 MB and 30 pages each: one requirements document and 2–3 vendor proposals.
+2. Does VixenOne choose the vendor for me? — No. It shows evidence, risks, cost and scores, and suggests a next step — or says when there isn't enough information to recommend.
+3. How are scores calculated? — Five weighted criteria: mandatory compliance, service coverage, cost comparability, SLA, unresolved risks. You can change the weights. Mandatory failures are always shown separately.
+4. Can I edit the extracted requirements? — Yes. Edit, add or remove them before analysis. Edits after analysis mark results stale until you re-run.
+5. Can I share the results? — Yes. Print or save the report as PDF, and copy the clarification questions to send to vendors.
+
+### Auth
+- One page, two tabs; routes /sign-in and /sign-up. Landing "Sign up" → /sign-up; "Sign in" → /sign-in.
+- Sign-up creates Firebase user, then PUT /me (name, role). Google sign-up → default role Facilities manager (ASSUMED).
+- Backend: users table in Postgres; /me read-or-create; PUT /me.
+
+### KPI tiles (S2)
+| Tile | Rule (computed, never typed) | Demo |
+| --- | --- | --- |
+| Evaluations | count all | 4 |
+| Needs action | status = Requirements review or Stale | 2 |
+| Analysed | status = Analysed | 1 |
+| Open clarifications | unanswered clarification questions across evaluations | 4 |
+- Clicking a tile filters the table. No trends, no percentages.

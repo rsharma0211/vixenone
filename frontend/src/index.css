@@ -1,0 +1,62 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: #FFFFFF;
+    --surface: #F8FAFC;
+    --border: #E2E8F0;
+    --text: #0F172A;
+    --muted: #64748B;
+    --muted-surface: #F1F5F9;
+
+    --accent: #4F46E5;
+    --accent-tint: #EEF2FF;
+    --accent-hover: #4338CA;
+
+    /* Status pairs (text / background) */
+    --status-compliant-text: #15803D;
+    --status-compliant-bg: #F0FDF4;
+
+    --status-partial-text: #B45309;
+    --status-partial-bg: #FFFBEB;
+
+    --status-noncompliant-text: #B91C1C;
+    --status-noncompliant-bg: #FEF2F2;
+
+    --status-notevidenced-text: #475569;
+    --status-notevidenced-bg: #F1F5F9;
+
+    --status-review: #7C3AED;
+
+    /* Severity indicators */
+    --severity-high: #B91C1C;
+    --severity-medium: #B45309;
+    --severity-low: #64748B;
+
+    /* Google Brand Colors */
+    --google-blue: #4285F4;
+    --google-green: #34A853;
+    --google-yellow: #FBBC05;
+    --google-red: #EA4335;
+
+    --radius: 8px;
+  }
+
+  * {
+    border-color: var(--border);
+  }
+
+  body {
+    background-color: var(--background);
+    color: var(--text);
+    font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-feature-settings: "tnum" 1, "cv02" 1, "cv03" 1, "cv04" 1, "cv11" 1;
+    font-variant-numeric: tabular-nums;
+    margin: 0;
+    padding: 0;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}

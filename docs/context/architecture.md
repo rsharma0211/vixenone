@@ -54,7 +54,13 @@ The local development stack consists of four Docker containers on a shared bridg
 4. **`web` (`vixenone-web`)**:
    - React 18, Vite 5, TypeScript 5 dev server on `5173`.
    - Polling file-watcher enabled (`usePolling: true`) for Docker live-reload.
-   - Displays title and backend status: `API: ok · DB: ok`.
+   - Design tokens: CSS custom properties (`--background`, `--surface`, `--accent`, `--status-*`, `--severity-*`), 0 raw hex colours in component code, Inter font with tabular numbers.
+   - UI Primitives: 19 shadcn/ui components in `frontend/src/components/ui/`.
+   - Status components: `FindingStatusBadge`, `LifecycleStatus`, `RiskBadge`, `MandatoryTag` in `frontend/src/components/status/`.
+   - App Shell: `Header` (fixed 56px, wordmark, user dropdown calling `/api/me`), `Sidebar` (expanded 240px with "+ New evaluation", "Evaluations", "RECENT" mock list, pinned Settings/Help; collapsed 64px tooltip mode, state persisted in `localStorage`), `AppShell` with full-screen layout and 520px slide-out drawer `Sheet`.
+   - Evaluation Layout: `EvaluationLayout` with breadcrumbs, title, meta line, and tab routes (`requirements`, `comparison`, `recommendation`).
+   - Authentication: Firebase JS SDK with environment-driven emulator detection (`initFirebaseAuth`), `AuthContext`, route guard `RequireAuth`, and S1 sign-in page with email/password and emulator Google popup.
+   - Mock Data Module: Strongly-typed demo dataset with 4 evaluations, 3 vendors, 8 requirements, 8x3 compliance matrix, cost breakdown with 18% GST, and deterministic scoring (64 / 86 / 58).
    - Depends on healthy `api`.
 
 ## Startup Sequence & Healthchecks

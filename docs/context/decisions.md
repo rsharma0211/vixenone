@@ -11,3 +11,4 @@ Append-only record of architectural and implementation decisions. Format: `YYYY-
 - 2026-10-12 — Swappable StorageService interface with LocalStorageService — Local disk writes for local development with pluggable cloud adapter interface for later.
 - 2026-10-12 — Environment-driven Firebase Admin initialization — Switch between emulator and ADC modes based purely on environment without service account keys, and fail fast in production if emulator is configured.
 - 2026-10-12 — Consolidate agent rulebook into GEMINI.md with AGENTS.md pointer — Single source of truth for repository rules reflecting PostgreSQL, async SQLAlchemy, storage interface, and Gemini configuration.
+- 2026-10-12 — Frontend foundation with CSS variables, shadcn/ui primitives, and environment-driven Firebase Auth SDK — Central design token enforcement without inline hex colours, strict user session guards, and persistent responsive shell.
