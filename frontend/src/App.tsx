@@ -3,6 +3,7 @@ import { AuthProvider } from '@/lib/auth/AuthContext';
 import { RequireAuth } from '@/components/auth/RequireAuth';
 import { AppShell } from '@/components/layout/AppShell';
 import { EvaluationLayout } from '@/components/layout/EvaluationLayout';
+import { LandingPage } from '@/pages/LandingPage';
 import { S1 } from '@/pages/S1';
 import { DevComponentsPage } from '@/pages/DevComponentsPage';
 import { EvaluationsListPage } from '@/pages/EvaluationsListPage';
@@ -14,8 +15,10 @@ export function App() {
     <AuthProvider>
       <BrowserRouter>
         <Routes>
-          {/* Public Authentication Route */}
+          {/* Public Routes */}
+          <Route path="/" element={<LandingPage />} />
           <Route path="/sign-in" element={<S1 />} />
+          <Route path="/sign-up" element={<S1 />} />
 
           {/* Protected Application Routes */}
           <Route
@@ -36,7 +39,6 @@ export function App() {
               <Route path="recommendation" element={<EvaluationTabPlaceholder />} />
             </Route>
 
-            <Route path="/" element={<Navigate to="/evaluations" replace />} />
             <Route path="*" element={<Navigate to="/evaluations" replace />} />
           </Route>
         </Routes>

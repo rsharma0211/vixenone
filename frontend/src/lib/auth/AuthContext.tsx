@@ -3,6 +3,8 @@ import {
   User,
   onAuthStateChanged,
   signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  updateProfile,
   signInWithPopup,
   signOut as firebaseSignOut,
 } from 'firebase/auth';
@@ -15,6 +17,7 @@ interface AuthContextValue {
   initials: string;
   loading: boolean;
   signInWithEmail: (email: string, pass: string) => Promise<void>;
+  signUpWithEmail: (email: string, pass: string, displayName?: string) => Promise<void>;
   signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
 }
@@ -65,6 +68,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     await signInWithEmailAndPassword(auth, email, pass);
   };
 
+  const signUpWithEmail = async (email: string, pass: string, displayName?: string) => {
+    const cred = await createUserWithEmailAndPassword(auth, email, pass);
+    if (displayName && cred.user) {
+      await updateProfile(cred.user, { displayName });
+    }
+  };
+
   const signInWithGoogle = async () => {
     await signInWithPopup(auth, googleProvider);
   };
@@ -84,6 +94,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         initials,
         loading,
         signInWithEmail,
+        signUpWithEmail,
         signInWithGoogle,
         signOut,
       }}

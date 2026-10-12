@@ -14,3 +14,5 @@ Statuses: `done` · `partial` · `stub`
 | Firebase Auth Emulator | Local Auth emulator on 9099 with UI on 4000 (Firestore & Storage removed) | `infra/docker/firebase/`, `firebase.json` | `done` | None |
 | Seed Script | Idempotent demo user creation in Auth emulator | `scripts/seed.py`, `scripts/seed.sh` | `done` | None |
 | Context Documentation | Architecture, implementation map, decisions tracking | `docs/context/` | `done` | Ongoing updates as features develop |
+| User Profile & Identity | User model, migration 0002, repository, service, and `/api/me` profile sync | `backend/app/models/user.py`, `backend/app/api/users.py` | `done` | None |
+| Public Landing Page (L0) | Public landing page at `/` with sticky header, scroll-spy navigation, hero comparison preview card, 3-step How It Works, 6-feature grid, Showcase screenshot carousel (auto-advance with hover/focus pause), Who It's For role carousel, Principle band, FAQ accordion, final CTA, and footer | `frontend/src/pages/LandingPage.tsx`, `frontend/src/components/ui/carousel.tsx`, `frontend/public/screenshots/` | `done` | None |

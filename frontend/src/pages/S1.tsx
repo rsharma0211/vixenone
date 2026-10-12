@@ -1,17 +1,37 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Eye, EyeOff, Loader2 } from 'lucide-react';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 export const S1: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, signInWithEmail, signInWithGoogle } = useAuth();
+  const { user, signInWithEmail, signUpWithEmail, signInWithGoogle } = useAuth();
 
-  const [email, setEmail] = useState('demo@vixenone.app');
-  const [password, setPassword] = useState('demo1234');
+  const isInitialSignUp = location.pathname === '/sign-up';
+  const [activeTab, setActiveTab] = useState<'sign-in' | 'sign-up'>(
+    isInitialSignUp ? 'sign-up' : 'sign-in'
+  );
+
+  // Sign-in states
+  const [signInEmail, setSignInEmail] = useState('demo@vixenone.app');
+  const [signInPassword, setSignInPassword] = useState('demo1234');
+
+  // Sign-up states
+  const [signUpName, setSignUpName] = useState('Priya Sharma');
+  const [signUpEmail, setSignUpEmail] = useState('');
+  const [signUpPassword, setSignUpPassword] = useState('');
+  const [role, setRole] = useState('Facilities manager');
+
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
@@ -21,11 +41,29 @@ export const S1: React.FC = () => {
   // If already authenticated, redirect to destination
   const from = (location.state as { from?: { pathname: string } })?.from?.pathname || '/evaluations';
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (user) {
       navigate(from, { replace: true });
     }
   }, [user, navigate, from]);
+
+  useEffect(() => {
+    if (location.pathname === '/sign-up') {
+      setActiveTab('sign-up');
+    } else if (location.pathname === '/sign-in') {
+      setActiveTab('sign-in');
+    }
+  }, [location.pathname]);
+
+  const handleTabChange = (tab: 'sign-in' | 'sign-up') => {
+    setActiveTab(tab);
+    setError(null);
+    if (tab === 'sign-in') {
+      navigate('/sign-in', { replace: true });
+    } else {
+      navigate('/sign-up', { replace: true });
+    }
+  };
 
   const handleEmailSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -33,11 +71,31 @@ export const S1: React.FC = () => {
     setLoading(true);
 
     try {
-      await signInWithEmail(email, password);
+      await signInWithEmail(signInEmail, signInPassword);
       navigate(from, { replace: true });
     } catch (err: any) {
       console.error('[Sign-in Error]', err?.code, err?.message);
       setError(`Invalid email or password (${err?.code || 'auth/error'}). Please try again.`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleEmailSignUp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (signUpPassword.length < 8) {
+      setError('Password must be at least 8 characters.');
+      return;
+    }
+    setError(null);
+    setLoading(true);
+
+    try {
+      await signUpWithEmail(signUpEmail, signUpPassword, signUpName);
+      navigate(from, { replace: true });
+    } catch (err: any) {
+      console.error('[Sign-up Error]', err?.code, err?.message);
+      setError(`Unable to create account (${err?.code || 'auth/error'}). Please try again.`);
     } finally {
       setLoading(false);
     }
@@ -87,6 +145,32 @@ export const S1: React.FC = () => {
           <p className="text-body text-muted">
             Evidence-backed vendor proposal evaluation.
           </p>
+        </div>
+
+        {/* Tab switcher: Sign in · Sign up */}
+        <div className="flex border-b border-border">
+          <button
+            type="button"
+            onClick={() => handleTabChange('sign-in')}
+            className={`flex-1 pb-2.5 text-sm text-center font-medium transition-colors focus:outline-none ${
+              activeTab === 'sign-in'
+                ? 'text-text font-semibold border-b-2 border-accent'
+                : 'text-muted hover:text-text'
+            }`}
+          >
+            Sign in
+          </button>
+          <button
+            type="button"
+            onClick={() => handleTabChange('sign-up')}
+            className={`flex-1 pb-2.5 text-sm text-center font-medium transition-colors focus:outline-none ${
+              activeTab === 'sign-up'
+                ? 'text-text font-semibold border-b-2 border-accent'
+                : 'text-muted hover:text-text'
+            }`}
+          >
+            Sign up
+          </button>
         </div>
 
         {/* Continue with Google button */}
@@ -141,78 +225,194 @@ export const S1: React.FC = () => {
           </div>
         )}
 
-        {/* Form */}
-        <form onSubmit={handleEmailSignIn} className="space-y-4">
-          <div className="space-y-1.5 text-left">
-            <label
-              htmlFor="email-input"
-              className="text-xs font-medium text-text block"
-            >
-              Email
-            </label>
-            <Input
-              id="email-input"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="you@company.com"
-              required
-              className="h-9"
-            />
-          </div>
-
-          <div className="space-y-1.5 text-left">
-            <div className="flex items-center justify-between">
+        {/* Tab 1: Sign in Form */}
+        {activeTab === 'sign-in' ? (
+          <form onSubmit={handleEmailSignIn} className="space-y-4">
+            <div className="space-y-1.5 text-left">
               <label
-                htmlFor="password-input"
+                htmlFor="email-input"
+                className="text-xs font-medium text-text block"
+              >
+                Email
+              </label>
+              <Input
+                id="email-input"
+                type="email"
+                value={signInEmail}
+                onChange={(e) => setSignInEmail(e.target.value)}
+                placeholder="you@company.com"
+                required
+                className="h-9"
+              />
+            </div>
+
+            <div className="space-y-1.5 text-left">
+              <div className="flex items-center justify-between">
+                <label
+                  htmlFor="password-input"
+                  className="text-xs font-medium text-text block"
+                >
+                  Password
+                </label>
+                <button
+                  type="button"
+                  onClick={handleForgotPassword}
+                  className="text-xs text-accent hover:underline focus:outline-none"
+                >
+                  Forgot password?
+                </button>
+              </div>
+              <div className="relative">
+                <Input
+                  id="password-input"
+                  type={showPassword ? 'text' : 'password'}
+                  value={signInPassword}
+                  onChange={(e) => setSignInPassword(e.target.value)}
+                  required
+                  className="h-9 pr-9"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted hover:text-text focus:outline-none"
+                >
+                  {showPassword ? (
+                    <EyeOff className="w-4 h-4" />
+                  ) : (
+                    <Eye className="w-4 h-4" />
+                  )}
+                </button>
+              </div>
+            </div>
+
+            <Button
+              type="submit"
+              variant="primary"
+              disabled={loading || googleLoading}
+              className="w-full h-10 font-medium justify-center"
+            >
+              {loading ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                'Sign in'
+              )}
+            </Button>
+          </form>
+        ) : (
+          /* Tab 2: Sign up Form */
+          <form onSubmit={handleEmailSignUp} className="space-y-4">
+            <div className="space-y-1.5 text-left">
+              <label
+                htmlFor="signup-name"
+                className="text-xs font-medium text-text block"
+              >
+                Full name
+              </label>
+              <Input
+                id="signup-name"
+                type="text"
+                value={signUpName}
+                onChange={(e) => setSignUpName(e.target.value)}
+                placeholder="Priya Sharma"
+                required
+                className="h-9"
+              />
+            </div>
+
+            <div className="space-y-1.5 text-left">
+              <label
+                htmlFor="signup-email"
+                className="text-xs font-medium text-text block"
+              >
+                Work email
+              </label>
+              <Input
+                id="signup-email"
+                type="email"
+                value={signUpEmail}
+                onChange={(e) => setSignUpEmail(e.target.value)}
+                placeholder="you@company.com"
+                required
+                className="h-9"
+              />
+            </div>
+
+            <div className="space-y-1.5 text-left">
+              <label
+                htmlFor="signup-password"
                 className="text-xs font-medium text-text block"
               >
                 Password
               </label>
-              <button
-                type="button"
-                onClick={handleForgotPassword}
-                className="text-xs text-accent hover:underline focus:outline-none"
-              >
-                Forgot password?
-              </button>
+              <div className="relative">
+                <Input
+                  id="signup-password"
+                  type={showPassword ? 'text' : 'password'}
+                  value={signUpPassword}
+                  onChange={(e) => setSignUpPassword(e.target.value)}
+                  placeholder=""
+                  required
+                  className="h-9 pr-9"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted hover:text-text focus:outline-none"
+                >
+                  {showPassword ? (
+                    <EyeOff className="w-4 h-4" />
+                  ) : (
+                    <Eye className="w-4 h-4" />
+                  )}
+                </button>
+              </div>
+              <p className="text-xs text-muted">At least 8 characters</p>
             </div>
-            <div className="relative">
-              <Input
-                id="password-input"
-                type={showPassword ? 'text' : 'password'}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                className="h-9 pr-9"
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted hover:text-text focus:outline-none"
-              >
-                {showPassword ? (
-                  <EyeOff className="w-4 h-4" />
-                ) : (
-                  <Eye className="w-4 h-4" />
-                )}
-              </button>
-            </div>
-          </div>
 
-          <Button
-            type="submit"
-            variant="primary"
-            disabled={loading || googleLoading}
-            className="w-full h-10 font-medium justify-center"
-          >
-            {loading ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              'Sign in'
-            )}
-          </Button>
-        </form>
+            <div className="space-y-1.5 text-left">
+              <label
+                htmlFor="signup-role"
+                className="text-xs font-medium text-text block"
+              >
+                Role
+              </label>
+              <Select value={role} onValueChange={setRole}>
+                <SelectTrigger id="signup-role" className="h-9">
+                  <SelectValue placeholder="Select role" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Facilities manager">Facilities manager</SelectItem>
+                  <SelectItem value="Procurement">Procurement</SelectItem>
+                  <SelectItem value="Approver">Approver</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <Button
+              type="submit"
+              variant="primary"
+              disabled={loading || googleLoading}
+              className="w-full h-10 font-medium justify-center"
+            >
+              {loading ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                'Create account'
+              )}
+            </Button>
+
+            <div className="text-center pt-1">
+              <button
+                type="button"
+                onClick={() => handleTabChange('sign-in')}
+                className="text-xs text-muted hover:text-text"
+              >
+                Already have an account?{' '}
+                <span className="text-accent hover:underline">Sign in</span>
+              </button>
+            </div>
+          </form>
+        )}
       </div>
 
       {/* Info box below card */}
