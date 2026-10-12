@@ -145,6 +145,27 @@ def seed_demo_user():
             except Exception as sql_exc:
                 print(f"Warning: direct SQL fallback failed: {sql_exc}", file=sys.stderr)
 
+        # 3. Seed demo dataset (evaluations, criteria, findings, scores, costs)
+        print("Seeding full demo dataset (evaluations, criteria, findings, scores, costs)...")
+        try:
+            subprocess.run(
+                [
+                    "docker",
+                    "compose",
+                    "exec",
+                    "-T",
+                    "api",
+                    "python",
+                    "-c",
+                    "import asyncio; from app.services.seed_demo import seed_demo_data; asyncio.run(seed_demo_data())",
+                ],
+                check=True,
+                capture_output=True,
+            )
+            print("Full demo dataset seeded successfully.")
+        except Exception as seed_exc:
+            print(f"Warning: could not run api demo seeder: {seed_exc}", file=sys.stderr)
+
         return 0
 
     return 1

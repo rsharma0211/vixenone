@@ -42,15 +42,27 @@ The local development stack consists of four Docker containers on a shared bridg
    - Python 3.12-slim, FastAPI, Uvicorn with `--reload`.
    - Listens on `8000`.
    - Data layer: SQLAlchemy 2 (async engine via `psycopg` 3) with shared session provider.
-   - Migrations: Alembic migrations (`0001_baseline`, `0002_create_users_table`), applied automatically on container startup.
+   - Migrations: Alembic migrations (`0001_baseline`, `0002_create_users_table`, `0003_criteria_evaluations`), applied automatically on container startup.
    - User Profile Model: `User` model with UUID primary key, unique `firebase_uid`, `email`, `display_name`, `role` (`user_role` enum: `facilities_manager`, `procurement`, `approver`), timestamps.
+   - Evaluation Criteria Model: `EvaluationCriterion` with UUID primary key, `user_id` (fk users), `kind` (builtin/custom), `builtin_key`, `name`, `guidance`, `weight` (0–100), `position`. Read-or-create on GET /api/criteria for 5 built-in items; atomic PUT with 422 validations.
+   - Evaluation Models: `Evaluation`, `Vendor`, `Document`, `Requirement`, `AnalysisJob`, `Finding`, `CriterionScore`, `CostBreakdown`, `Clarification` all scoped to authenticated user with cascade delete.
+   - Scoring Engine: Pure Python functions in `app/services/scoring.py` computing points and totals dynamically using exact `Decimal` arithmetic. Round half-up applied strictly for display: points to 1 decimal, totals to whole numbers. Stored data holds only raw criterion scores; points and totals are never stored.
+   - Document Validator: Byte signature checking (`%PDF-` with `pdfplumber` page counting <= 30 pages; DOCX ZIP archive containing `word/document.xml`).
    - Auth layer: Firebase Admin SDK validating Bearer tokens; environment-driven initialization (emulator mode when FIREBASE_AUTH_EMULATOR_HOST is set, Application Default Credentials ADC when absent; fails fast in production if emulator is set).
    - AI settings: GEMINI_API_KEY (SecretStr) and GEMINI_MODEL (default gemini-3.6-flash) wired to configuration.
    - Storage layer: Swappable storage interface (`StorageService`) with local disk implementation (`LocalStorageService`) writing to `./uploads`.
    - Endpoints:
      - `GET /health`: Public, returns `{"status": "ok", "db": "ok"}`.
-     - `GET /api/me`: Protected by Firebase ID token Bearer check, retrieves or creates Postgres user profile with default role `facilities_manager` and email fallback display name; concurrency-safe UPSERT.
-     - `PUT /api/me`: Protected by Firebase ID token Bearer check, updates `display_name` and/or `role` with validation; rejects empty/whitespace names and invalid roles (422).
+     - `GET /api/me`, `PUT /api/me`: User profile.
+     - `GET /api/criteria`: Read-or-create user evaluation criteria.
+     - `PUT /api/criteria`: Atomic criteria set replacement with strict 422 validations.
+     - `GET /api/evaluations`: List evaluations and dynamically computed KPIs (`total`, `needs_action`, `analysed`, `open_clarifications`).
+     - `POST /api/evaluations`: Create evaluation with 2–3 vendors.
+     - `GET / PATCH / DELETE /api/evaluations/{id}`: Evaluation CRUD with storage file cleanup on delete.
+     - `POST / DELETE /api/evaluations/{id}/documents`: Content-based validation and replacement.
+     - `GET / PUT /api/evaluations/{id}/requirements`: Atomic requirements replacement (`analysed` -> `stale`).
+     - `GET /api/evaluations/{id}/jobs/latest`: Latest background analysis job status.
+     - `GET /api/evaluations/{id}/results`: Compliance matrix, costs, clarifications, and scoring with raw and display values.
      - Bare `/me`: Removed (returns 404).
    - Depends on healthy `postgres` and `firebase-auth-emulator`.
 
