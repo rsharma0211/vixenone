@@ -38,7 +38,6 @@ from app.models.evaluation import (
 )
 from app.services.job_launcher import InlineJobLauncher, get_job_launcher
 from app.services.scoring import (
-    AutoAddedCostItem,
     MISSING_BASE_UNKNOWN_LABEL,
     compute_cost_amounts,
     compute_cost_comparability_score,
@@ -47,7 +46,6 @@ from app.services.scoring import (
     compute_recommendation,
     compute_unresolved_risks_score,
     deduplicate_clarifications,
-    is_auto_added_unknown,
 )
 from app.services.verification import (
     normalise_text_for_verification,
@@ -235,11 +233,11 @@ def test_scoring_rules_and_floors():
 
     # Cost comparability: 100 - 40 if base missing - 15 per unknown item; floor 0
     # base present, 2 unknowns -> 100 - 30 = 70
-    assert compute_cost_comparability_score(Decimal("385000"), ["u1", "u2"]) == Decimal("70")
+    assert compute_cost_comparability_score(Decimal("385000"), 2) == Decimal("70")
     # base missing, 1 unknown -> 100 - 40 - 15 = 45
-    assert compute_cost_comparability_score(None, ["u1"]) == Decimal("45")
+    assert compute_cost_comparability_score(None, 1) == Decimal("45")
     # floor check: base missing, 5 unknowns -> 100 - 40 - 75 = -15 -> 0
-    assert compute_cost_comparability_score(None, ["1", "2", "3", "4", "5"]) == Decimal("0")
+    assert compute_cost_comparability_score(None, 5) == Decimal("0")
 
     # Unresolved risks: 100 - (high 20, medium 10, low 5) per finding/risk; floor 0
     items = [
@@ -256,46 +254,18 @@ def test_scoring_rules_and_floors():
     assert compute_unresolved_risks_score(many_high) == Decimal("0")
 
 
-def test_cost_comparability_double_penalty_fix_and_marker():
-    # 1. base null + no other unknowns -> 60
-    assert compute_cost_comparability_score(None, []) == Decimal("60")
-    res_null_no_unknowns = compute_cost_amounts(None, [])
-    assert compute_cost_comparability_score(
-        res_null_no_unknowns["monthly_base"], res_null_no_unknowns["unknown"]
-    ) == Decimal("60")
+def test_cost_comparability_scoring_rules():
+    # 1. base null + 0 extracted unknowns -> 60
+    assert compute_cost_comparability_score(None, 0) == Decimal("60")
 
-    # 2. base null + 2 other unknowns -> 30
-    assert compute_cost_comparability_score(None, ["u1", "u2"]) == Decimal("30")
-    res_null_2_unknowns = compute_cost_amounts(None, ["u1", "u2"])
-    assert compute_cost_comparability_score(
-        res_null_2_unknowns["monthly_base"], res_null_2_unknowns["unknown"]
-    ) == Decimal("30")
+    # 2. base null + 2 extracted unknowns -> 30
+    assert compute_cost_comparability_score(None, 2) == Decimal("30")
 
-    # 3. base present + 2 unknowns -> 70
-    assert compute_cost_comparability_score(Decimal("385000"), ["u1", "u2"]) == Decimal("70")
-    res_present_2_unknowns = compute_cost_amounts(Decimal("385000"), ["u1", "u2"])
-    assert compute_cost_comparability_score(
-        res_present_2_unknowns["monthly_base"], res_present_2_unknowns["unknown"]
-    ) == Decimal("70")
+    # 3. base present + 2 extracted unknowns -> 70
+    assert compute_cost_comparability_score(Decimal("385000"), 2) == Decimal("70")
 
-    # 4. base null + 5 other unknowns -> 0 (floor)
-    assert compute_cost_comparability_score(None, ["1", "2", "3", "4", "5"]) == Decimal("0")
-    res_null_5_unknowns = compute_cost_amounts(None, ["1", "2", "3", "4", "5"])
-    assert compute_cost_comparability_score(
-        res_null_5_unknowns["monthly_base"], res_null_5_unknowns["unknown"]
-    ) == Decimal("0")
-
-    # Marker verification: stable marker set where it is added, not by matching display text.
-    # A plain string with identical display text without marker is treated as regular unknown (-15).
-    plain_text_item = str(MISSING_BASE_UNKNOWN_LABEL)
-    assert not is_auto_added_unknown(plain_text_item)
-    # base missing (-40) + 1 plain unknown (-15) = 45
-    assert compute_cost_comparability_score(None, [plain_text_item]) == Decimal("45")
-
-    # But with the stable marker (via AutoAddedCostItem), it is excluded from minus-15 count -> 60
-    marked_item = AutoAddedCostItem(MISSING_BASE_UNKNOWN_LABEL)
-    assert is_auto_added_unknown(marked_item)
-    assert compute_cost_comparability_score(None, [marked_item]) == Decimal("60")
+    # 4. base null + 5 extracted unknowns -> 0 (floor)
+    assert compute_cost_comparability_score(None, 5) == Decimal("0")
 
 
 # =========================================================================
@@ -750,6 +720,107 @@ def test_weights_endpoint_and_user_criteria_untouched():
             user_crits = client.get("/api/criteria", headers=auth).json()
             user_mand = next(c for c in user_crits if c.get("builtin_key") == "mandatory_compliance")
             assert user_mand["weight"] == 35  # default untouched
+    finally:
+        app.dependency_overrides.pop(get_job_launcher, None)
+
+
+def test_analyse_job_cost_comparability_e2e_no_double_penalty():
+    uid = f"uid-p4-cost-e2e-{uuid.uuid4().hex}"
+    fake_gemini = FakeGeminiClient(
+        analysis_by_vendor={
+            "Vendor A": VendorAnalysisResult(
+                requirement_findings=[
+                    ExtractedRequirementFinding(
+                        code="R1",
+                        status="compliant",
+                        quote="Page 1 test content",
+                        page=1,
+                        section=None,
+                        confidence="high",
+                        is_inference=False,
+                        risk_types=[],
+                        severity="low",
+                        clarification_question=None,
+                    )
+                ],
+                criterion_findings=[],
+                risks=[],
+                cost=ExtractedCost(
+                    monthly_base=None,
+                    included=[],
+                    excluded=[],
+                    optional=[],
+                    unknown=[],
+                ),
+            ),
+            "Vendor B": VendorAnalysisResult(
+                requirement_findings=[
+                    ExtractedRequirementFinding(
+                        code="R1",
+                        status="compliant",
+                        quote="Page 1 test content",
+                        page=1,
+                        section=None,
+                        confidence="high",
+                        is_inference=False,
+                        risk_types=[],
+                        severity="low",
+                        clarification_question=None,
+                    )
+                ],
+                criterion_findings=[],
+                risks=[],
+                cost=ExtractedCost(
+                    monthly_base=Decimal("385000"),
+                    included=[],
+                    excluded=[],
+                    optional=[],
+                    unknown=[
+                        ExtractedCostItem(item="Washroom consumables at actuals"),
+                        ExtractedCostItem(item="Pest control on request"),
+                    ],
+                ),
+            ),
+        }
+    )
+    app.dependency_overrides[get_job_launcher] = lambda: InlineJobLauncher(
+        async_session, lambda: fake_gemini
+    )
+    try:
+        with patch("firebase_admin.auth.verify_id_token", return_value=_fake_token(uid)):
+            auth = {"Authorization": "Bearer token"}
+            eval_id, vendor_ids, req_doc_id = _setup_eval_ready_for_analysis(uid)
+
+            # Trigger analysis job
+            resp = client.post(f"/api/evaluations/{eval_id}/analyse", headers=auth)
+            assert resp.status_code == 202
+            assert resp.json()["status"] == "done"
+
+            # Query database directly for stored CriterionScore and CostBreakdown
+            async def _verify_stored_cost_comparability():
+                async with async_session() as s:
+                    # Criterion scores for cost_comparability
+                    scores_stmt = select(CriterionScore).where(
+                        CriterionScore.evaluation_id == uuid.UUID(eval_id),
+                        CriterionScore.criterion_key == "cost_comparability",
+                    )
+                    score_rows = (await s.execute(scores_stmt)).scalars().all()
+                    scores_by_vendor = {str(cs.vendor_id): cs.score for cs in score_rows}
+
+                    # Assert stored raw cost_comparability scores are 60 and 70
+                    assert scores_by_vendor[vendor_ids[0]] == Decimal("60")
+                    assert scores_by_vendor[vendor_ids[1]] == Decimal("70")
+
+                    # Assert stored cost breakdown for Vendor A contains "Monthly base price not stated" in unknown
+                    cb_stmt = select(CostBreakdown).where(
+                        CostBreakdown.evaluation_id == uuid.UUID(eval_id),
+                        CostBreakdown.vendor_id == uuid.UUID(vendor_ids[0]),
+                    )
+                    cb_v1 = (await s.execute(cb_stmt)).scalar_one()
+                    assert cb_v1.monthly_base is None
+                    assert "Monthly base price not stated" in cb_v1.unknown
+
+            asyncio.run(_verify_stored_cost_comparability())
     finally:
         app.dependency_overrides.pop(get_job_launcher, None)
 

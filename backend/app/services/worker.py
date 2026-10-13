@@ -886,6 +886,41 @@ async def _run_analyse(
             if x.item and x.item.strip()
         ]
 
+        # Clarifications (deduplicated per vendor on normalised text, answered = False)
+        deduped_questions = deduplicate_clarifications(vendor_questions)
+        for q_text in deduped_questions:
+            new_clarifications.append(
+                Clarification(
+                    id=uuid.uuid4(),
+                    evaluation_id=evaluation_id,
+                    vendor_id=v_id,
+                    question=q_text,
+                    answered=False,
+                )
+            )
+
+        # Criterion scores (raw 0-100 score for every snapshot key)
+        # Cost comparability is computed from the extracted unknown list BEFORE appending display placeholder
+        raw_scores_map = compute_raw_criterion_scores(
+            criteria_snapshot=criteria_snapshot,
+            mandatory_statuses=mandatory_statuses,
+            criterion_findings_by_key=criterion_status_by_key,
+            monthly_base=v_analysis.cost.monthly_base,
+            unknown_items=raw_unknown,
+            findings_and_risks=vendor_risk_items,
+        )
+        for c_key, c_score in raw_scores_map.items():
+            new_scores.append(
+                CriterionScore(
+                    id=uuid.uuid4(),
+                    evaluation_id=evaluation_id,
+                    vendor_id=v_id,
+                    criterion_key=c_key,
+                    score=c_score,
+                )
+            )
+
+        # Cost breakdown (append display placeholder to stored unknown list if base not stated)
         cost_calc = compute_cost_amounts(
             monthly_base=v_analysis.cost.monthly_base,
             unknown_items=raw_unknown,
@@ -904,39 +939,6 @@ async def _run_analyse(
                 unknown=cost_calc["unknown"],
             )
         )
-
-        # Clarifications (deduplicated per vendor on normalised text, answered = False)
-        deduped_questions = deduplicate_clarifications(vendor_questions)
-        for q_text in deduped_questions:
-            new_clarifications.append(
-                Clarification(
-                    id=uuid.uuid4(),
-                    evaluation_id=evaluation_id,
-                    vendor_id=v_id,
-                    question=q_text,
-                    answered=False,
-                )
-            )
-
-        # Criterion scores (raw 0-100 score for every snapshot key)
-        raw_scores_map = compute_raw_criterion_scores(
-            criteria_snapshot=criteria_snapshot,
-            mandatory_statuses=mandatory_statuses,
-            criterion_findings_by_key=criterion_status_by_key,
-            monthly_base=v_analysis.cost.monthly_base,
-            unknown_items=cost_calc["unknown"],
-            findings_and_risks=vendor_risk_items,
-        )
-        for c_key, c_score in raw_scores_map.items():
-            new_scores.append(
-                CriterionScore(
-                    id=uuid.uuid4(),
-                    evaluation_id=evaluation_id,
-                    vendor_id=v_id,
-                    criterion_key=c_key,
-                    score=c_score,
-                )
-            )
 
     # Write all vendors in one transaction
     finish_now = datetime.now(timezone.utc)
