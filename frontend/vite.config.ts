@@ -54,23 +54,7 @@ export default defineConfig(({ command, mode }) => {
   }
 
   return {
-    plugins: [
-      react(),
-      ...(isProductionBuild
-        ? [
-            {
-              name: 'prod-clean-guard',
-              apply: 'build' as const,
-              renderChunk(code: string) {
-                const cleaned = code
-                  .replace(/http:\/\/localhost/g, 'about:blank')
-                  .replace(/fake-api-key/g, '');
-                return { code: cleaned, map: null };
-              },
-            },
-          ]
-        : []),
-    ],
+    plugins: [react()],
     define: isProductionBuild
       ? {
           'import.meta.env.VITE_API_BASE_URL': JSON.stringify(''),
