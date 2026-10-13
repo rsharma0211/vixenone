@@ -72,13 +72,13 @@ export const AppShell: React.FC = () => {
 
         <main
           className={cn(
-            "flex-1 transition-all duration-200 pt-14",
+            "flex-1 transition-all duration-200 pt-14 print:pt-0 print:ml-0",
             collapsed ? "ml-16" : "ml-60"
           )}
         >
           <div
             className={cn(
-              "w-full transition-all duration-200",
+              "w-full transition-all duration-200 print:p-0 print:max-w-none",
               collapsed
                 ? "px-10 pt-8 pb-12"
                 : "max-w-[1200px] mx-auto px-6 pt-8 pb-12"

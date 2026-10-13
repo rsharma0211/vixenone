@@ -13,7 +13,7 @@ import { SettingsPage } from '@/pages/SettingsPage';
 import { ProfilePage } from '@/pages/ProfilePage';
 import { RequirementsReviewPage } from '@/pages/RequirementsReviewPage';
 import { ComparisonPage } from '@/pages/ComparisonPage';
-import { EvaluationTabPlaceholder } from '@/pages/EvaluationTabPlaceholder';
+import { RecommendationPage } from '@/pages/RecommendationPage';
 
 const router = createBrowserRouter([
   {
@@ -82,7 +82,7 @@ const router = createBrowserRouter([
           },
           {
             path: 'recommendation',
-            element: <EvaluationTabPlaceholder />,
+            element: <RecommendationPage />,
           },
         ],
       },

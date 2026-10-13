@@ -12,23 +12,30 @@ export interface KpiTileProps {
   label: string;
   value: React.ReactNode;
   helpText: string;
+  subtext?: React.ReactNode;
+  statusAccent?: 'compliant' | 'noncompliant' | 'partial';
   onClick?: () => void;
   active?: boolean;
   className?: string;
+  valueClassName?: string;
 }
 
 export const KpiTile: React.FC<KpiTileProps> = ({
   label,
   value,
   helpText,
+  subtext,
+  statusAccent,
   onClick,
   active = false,
   className,
+  valueClassName,
 }) => {
   const [open, setOpen] = useState<boolean>(false);
   const helpId = useId();
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const contentRef = useRef<HTMLDivElement | null>(null);
+  const valueContainerRef = useRef<HTMLDivElement | null>(null);
   const isPointerDownOnTriggerRef = useRef<boolean>(false);
 
   const handleOpenChange = useCallback((nextOpen: boolean) => {
@@ -65,6 +72,35 @@ export const KpiTile: React.FC<KpiTileProps> = ({
     };
   }, [open]);
 
+  // Shrink value font-size if it exceeds container width so values never clip or ellipsis
+  useEffect(() => {
+    const el = valueContainerRef.current;
+    if (!el) return;
+
+    const adjustSize = () => {
+      el.style.fontSize = '';
+      const computed = window.getComputedStyle(el);
+      let currentPx = parseFloat(computed.fontSize) || 28;
+      const minPx = 13;
+
+      while (el.scrollWidth > el.clientWidth && currentPx > minPx) {
+        currentPx -= 1;
+        el.style.fontSize = `${currentPx}px`;
+      }
+    };
+
+    adjustSize();
+
+    const ro = new ResizeObserver(() => {
+      adjustSize();
+    });
+    ro.observe(el);
+
+    return () => {
+      ro.disconnect();
+    };
+  }, [value]);
+
   const handleTileKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
     if (!onClick) return;
     if (e.target !== e.currentTarget) return;
@@ -72,6 +108,12 @@ export const KpiTile: React.FC<KpiTileProps> = ({
       e.preventDefault();
       onClick();
     }
+  };
+
+  const statusAccentStyles: Record<'compliant' | 'noncompliant' | 'partial', string> = {
+    compliant: 'border-status-compliant-text/30 bg-status-compliant-bg/50',
+    noncompliant: 'border-status-noncompliant-text/30 bg-status-noncompliant-bg/50',
+    partial: 'border-status-partial-text/30 bg-status-partial-bg/50',
   };
 
   return (
@@ -83,17 +125,19 @@ export const KpiTile: React.FC<KpiTileProps> = ({
         onClick={onClick}
         onKeyDown={onClick ? handleTileKeyDown : undefined}
         className={cn(
-          'rounded-lg border p-4 text-left transition-all',
+          'rounded-lg border p-4 text-left transition-all flex flex-col justify-between min-w-0',
           onClick &&
             'cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
           active
             ? 'border-navy ring-2 ring-navy bg-surface shadow-sm'
+            : statusAccent
+            ? statusAccentStyles[statusAccent]
             : cn('border-border bg-background', onClick && 'hover:bg-surface/50'),
           className
         )}
       >
-        <div className="flex items-center gap-1.5">
-          <span className="text-xs font-medium text-muted uppercase tracking-wider">
+        <div className="flex items-start gap-1 min-w-0">
+          <span className="text-xs font-medium text-muted uppercase tracking-wider leading-snug break-words line-clamp-2 min-w-0 flex-1">
             {label}
           </span>
           <Tooltip open={open} onOpenChange={handleOpenChange}>
@@ -135,7 +179,7 @@ export const KpiTile: React.FC<KpiTileProps> = ({
                     setOpen(false);
                   }
                 }}
-                className="inline-flex items-center justify-center rounded-sm p-0.5 text-muted hover:text-navy focus-visible:text-navy focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring transition-colors"
+                className="inline-flex items-center justify-center rounded-sm p-0.5 text-muted hover:text-navy focus-visible:text-navy focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring transition-colors shrink-0 mt-0.5"
               >
                 <Info className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
               </button>
@@ -159,8 +203,30 @@ export const KpiTile: React.FC<KpiTileProps> = ({
             </span>
           )}
         </div>
-        <div className="text-2xl sm:text-3xl font-bold text-navy mt-1 tracking-tight">
-          {value}
+        <div className="mt-1 min-w-0">
+          <div
+            ref={valueContainerRef}
+            className={cn(
+              'text-2xl sm:text-3xl font-bold text-navy tracking-tight whitespace-nowrap overflow-hidden leading-tight',
+              statusAccent && value === 'Not stated' && 'text-status-partial-text text-xl sm:text-2xl',
+              valueClassName
+            )}
+          >
+            {value}
+          </div>
+          {subtext && (
+            <div
+              className={cn(
+                'text-xs font-medium mt-1 truncate',
+                statusAccent === 'compliant' && 'text-status-compliant-text',
+                statusAccent === 'noncompliant' && 'text-status-noncompliant-text',
+                statusAccent === 'partial' && 'text-status-partial-text',
+                !statusAccent && 'text-muted'
+              )}
+            >
+              {subtext}
+            </div>
+          )}
         </div>
       </div>
     </TooltipProvider>
@@ -168,3 +234,4 @@ export const KpiTile: React.FC<KpiTileProps> = ({
 };
 
 export default KpiTile;
+

@@ -80,7 +80,7 @@ export const EvaluationLayout: React.FC = () => {
   return (
     <div className="space-y-6 text-left">
       {/* Header section: Breadcrumb -> Title -> Meta */}
-      <div className="space-y-1.5">
+      <div className="space-y-1.5 print:hidden">
         <nav className="flex items-center text-xs text-muted">
           <Link
             to="/evaluations"
@@ -105,7 +105,7 @@ export const EvaluationLayout: React.FC = () => {
       </div>
 
       {/* Tabs navigation row */}
-      <div className="border-b border-border flex items-center gap-8 -mb-px">
+      <div className="border-b border-border flex items-center gap-8 -mb-px print:hidden">
         {tabs.map((tab) => (
           <NavLink
             key={tab.name}

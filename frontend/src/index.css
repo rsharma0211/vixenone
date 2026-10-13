@@ -68,3 +68,49 @@
     -moz-osx-font-smoothing: grayscale;
   }
 }
+
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 12mm 15mm;
+  }
+
+  html,
+  body {
+    background: #ffffff !important;
+    color: #142b45 !important;
+    font-size: 11pt !important;
+    line-height: 1.4 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Hide app shell, sidebar, header, tabs, buttons, inputs, tooltips, drawer, alerts */
+  header,
+  aside,
+  nav,
+  button,
+  input,
+  [role="tooltip"],
+  .no-print,
+  .print-hidden {
+    display: none !important;
+  }
+
+  /* Show print-only elements */
+  .print-only {
+    display: block !important;
+  }
+
+  /* Avoid page breaks inside table rows and critical sections */
+  tr,
+  .print-avoid-break {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+
+  table {
+    page-break-inside: auto;
+  }
+}
+

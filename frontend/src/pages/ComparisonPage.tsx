@@ -2,8 +2,7 @@ import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { useParams, Link, useOutletContext } from 'react-router-dom';
 import { RefreshCw, AlertTriangle, Flag, ArrowRight } from 'lucide-react';
 import { apiClient } from '@/lib/api/client';
-import { KpiTile } from '@/components/KpiTile';
-import { KPI_HELP_TEXT } from '@/lib/kpiHelp';
+import { VendorSummaryCards } from '@/components/VendorSummaryCards';
 import { FindingStatusBadge } from '@/components/status/FindingStatusBadge';
 import { RiskBadge } from '@/components/status/RiskBadge';
 import {
@@ -273,44 +272,7 @@ export const ComparisonPage: React.FC = () => {
       {/* Vendor Summary: 3 KPI Tiles per vendor */}
       <section className="space-y-3">
         <h2 className="text-section-title font-semibold text-text">Vendor summary</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-          {vendors.map((v) => (
-            <div
-              key={v.id}
-              className="rounded-lg border border-border bg-background p-4 space-y-3.5"
-            >
-              <div className="border-b border-border pb-2 flex items-center justify-between">
-                <h3 className="font-semibold text-sm text-text truncate" title={v.name}>
-                  {v.name}
-                </h3>
-                {v.tag && (
-                  <span className="rounded bg-muted-surface text-muted text-[11px] font-medium px-2 py-0.5">
-                    {v.tag}
-                  </span>
-                )}
-              </div>
-              <div className="grid grid-cols-3 gap-2">
-                <KpiTile
-                  label="Vendor score"
-                  value={
-                    v.score !== null && v.score !== undefined ? String(v.score) : '—'
-                  }
-                  helpText={KPI_HELP_TEXT.vendor_score}
-                />
-                <KpiTile
-                  label="Mandatory met"
-                  value={`${v.mandatory_met} / ${v.mandatory_total}`}
-                  helpText={KPI_HELP_TEXT.mandatory_met}
-                />
-                <KpiTile
-                  label="Monthly cost"
-                  value={formatINR(v.monthly_total_inr)}
-                  helpText={KPI_HELP_TEXT.monthly_cost}
-                />
-              </div>
-            </div>
-          ))}
-        </div>
+        <VendorSummaryCards vendors={vendors} />
       </section>
 
       {/* Compliance Matrix */}

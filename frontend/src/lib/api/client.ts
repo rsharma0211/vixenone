@@ -548,6 +548,27 @@ class ApiClient {
     );
     return this.handleResponse<EvaluationResultsResponse>(response);
   }
+
+  // --- Weights ---
+  async updateWeights(
+    evaluationId: string,
+    weights: Record<string, number>
+  ): Promise<EvaluationResultsResponse> {
+    const headers = await this.getAuthHeader();
+    const response = await fetch(
+      `${BASE_URL}/api/evaluations/${evaluationId}/weights`,
+      {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          ...headers,
+        },
+        body: JSON.stringify(weights),
+      }
+    );
+    return this.handleResponse<EvaluationResultsResponse>(response);
+  }
 }
 
 export const apiClient = new ApiClient();
+
