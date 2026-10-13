@@ -6,6 +6,39 @@ from app.services.verification import normalise_text_for_verification
 MISSING_BASE_UNKNOWN_LABEL = "Monthly base price not stated"
 
 
+class AutoAddedCostItem(str):
+    """Marker subclass for auto-added unknown cost line when monthly base is missing."""
+    is_auto_added: bool = True
+    auto_added: bool = True
+
+    def __new__(cls, content: str = MISSING_BASE_UNKNOWN_LABEL):
+        obj = str.__new__(cls, content)
+        obj.is_auto_added = True
+        obj.auto_added = True
+        return obj
+
+
+def is_auto_added_unknown(item: Any) -> bool:
+    """Return True if item has the stable marker set where it was auto-added.
+
+    Identified by marker only, never by matching display text.
+    """
+    if isinstance(item, AutoAddedCostItem):
+        return True
+    if getattr(item, "is_auto_added", False) or getattr(item, "auto_added", False):
+        return True
+    if getattr(item, "is_missing_base", False) or getattr(item, "missing_base", False):
+        return True
+    if isinstance(item, dict):
+        return bool(
+            item.get("is_auto_added")
+            or item.get("auto_added")
+            or item.get("is_missing_base")
+            or item.get("missing_base")
+        )
+    return False
+
+
 def status_to_score(status: str) -> Decimal:
     """Map compliance status to a raw score between 0 and 100.
 
@@ -68,7 +101,7 @@ def compute_cost_comparability_score(
     base_missing: Optional[bool] = None,
     unknown_count: Optional[int] = None,
 ) -> Decimal:
-    """cost_comparability = 100 - 40 if base missing - 15 per unknown item; floor 0."""
+    """cost_comparability = 100 - 40 if base missing - 15 per other unknown item; floor 0."""
     is_base_missing = (
         base_missing if base_missing is not None else (monthly_base is None)
     )
@@ -77,6 +110,8 @@ def compute_cost_comparability_score(
     elif unknown_items is not None:
         filtered = []
         for item in unknown_items:
+            if is_auto_added_unknown(item):
+                continue
             text = (
                 getattr(item, "item", None)
                 if not isinstance(item, (str, dict))
@@ -84,11 +119,6 @@ def compute_cost_comparability_score(
             )
             s = str(text or "").strip()
             if not s:
-                continue
-            if (
-                is_base_missing
-                and s.lower() == MISSING_BASE_UNKNOWN_LABEL.lower()
-            ):
                 continue
             filtered.append(s)
         count = len(filtered)
@@ -159,26 +189,39 @@ def compute_raw_criterion_scores(
 
 def compute_cost_amounts(
     monthly_base: Optional[Any],
-    unknown_items: Optional[Sequence[str]] = None,
+    unknown_items: Optional[Sequence[Any]] = None,
 ) -> Dict[str, Any]:
     """Compute exact Decimal GST (18%) and monthly_total from monthly_base.
 
     Base null -> gst and total null, and add 'Monthly base price not stated' to unknown.
     """
-    unknown_list = [
-        str(u).strip() for u in (unknown_items or []) if u and str(u).strip()
-    ]
+    unknown_list: List[Any] = []
+    for u in (unknown_items or []):
+        if not u:
+            continue
+        if is_auto_added_unknown(u):
+            unknown_list.append(u)
+        else:
+            text = (
+                getattr(u, "item", None)
+                if not isinstance(u, (str, dict))
+                else (u.get("item") if isinstance(u, dict) else u)
+            )
+            s = str(text or "").strip()
+            if s:
+                unknown_list.append(s)
+
     if monthly_base is None:
-        if not any(
-            u.lower() == MISSING_BASE_UNKNOWN_LABEL.lower() for u in unknown_list
-        ):
-            unknown_list.append(MISSING_BASE_UNKNOWN_LABEL)
+        if not any(is_auto_added_unknown(u) for u in unknown_list):
+            unknown_list.append(AutoAddedCostItem(MISSING_BASE_UNKNOWN_LABEL))
         return {
             "monthly_base": None,
             "gst_18": None,
             "monthly_total": None,
             "unknown": unknown_list,
         }
+
+    cleaned_unknowns = [u for u in unknown_list if not is_auto_added_unknown(u)]
 
     base_dec = Decimal(str(monthly_base)).quantize(
         Decimal("0.01"), rounding=ROUND_HALF_UP
@@ -193,7 +236,7 @@ def compute_cost_amounts(
         "monthly_base": base_dec,
         "gst_18": gst_dec,
         "monthly_total": total_dec,
-        "unknown": unknown_list,
+        "unknown": cleaned_unknowns,
     }
 
 

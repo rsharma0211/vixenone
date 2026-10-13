@@ -924,7 +924,7 @@ async def _run_analyse(
             mandatory_statuses=mandatory_statuses,
             criterion_findings_by_key=criterion_status_by_key,
             monthly_base=v_analysis.cost.monthly_base,
-            unknown_items=raw_unknown,
+            unknown_items=cost_calc["unknown"],
             findings_and_risks=vendor_risk_items,
         )
         for c_key, c_score in raw_scores_map.items():
