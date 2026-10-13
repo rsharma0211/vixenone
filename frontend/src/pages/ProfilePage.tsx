@@ -1,5 +1,4 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
-import { useBlocker } from 'react-router-dom';
 import { AlertCircle, CheckCircle2 } from 'lucide-react';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { UserRole, ROLE_LABELS, USER_ROLES } from '@/lib/auth/roles';
@@ -13,14 +12,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
+import { useUnsavedChangesGuard } from '@/components/UnsavedChangesGuard';
 
 export const ProfilePage: React.FC = () => {
   const { user, setProfile } = useAuth();
@@ -76,26 +68,8 @@ export const ProfilePage: React.FC = () => {
     return name.trim() !== initialName.trim() || role !== initialRole;
   }, [loading, name, role, initialName, initialRole]);
 
-  // Unsaved changes tab close / reload guard
-  useEffect(() => {
-    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      if (isDirty) {
-        e.preventDefault();
-        e.returnValue = '';
-      }
-    };
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, [isDirty]);
-
-  // In-app navigation blocker
-  const blocker = useBlocker(
-    useCallback(
-      ({ currentLocation, nextLocation }: { currentLocation: { pathname: string }; nextLocation: { pathname: string } }) =>
-        isDirty && currentLocation.pathname !== nextLocation.pathname,
-      [isDirty]
-    )
-  );
+  // Unsaved changes: reload/close warning and in-app navigation blocking
+  const { guardDialog } = useUnsavedChangesGuard(isDirty);
 
   // Client validation
   const clientErrors = useMemo(() => {
@@ -291,26 +265,7 @@ export const ProfilePage: React.FC = () => {
       </div>
 
       {/* In-App Navigation Unsaved Changes Dialog */}
-      {blocker && blocker.state === 'blocked' && (
-        <Dialog open={true} onOpenChange={() => blocker.reset?.()}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Unsaved changes</DialogTitle>
-              <DialogDescription>
-                You have unsaved changes to your profile. If you leave this page now, your changes will be lost.
-              </DialogDescription>
-            </DialogHeader>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => blocker.reset?.()}>
-                Stay on page
-              </Button>
-              <Button variant="destructive" onClick={() => blocker.proceed?.()}>
-                Discard changes and leave
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      )}
+      {guardDialog}
     </div>
   );
 };

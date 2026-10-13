@@ -12,7 +12,12 @@ import type {
   ExtractRequirementsRequest,
   AnalysisJobResponse,
   EvaluationResultsResponse,
+  Schemas,
 } from '@/lib/types';
+
+type VendorCreate = Schemas['VendorCreate'];
+type VendorUpdate = Schemas['VendorUpdate'];
+type VendorResponse = Schemas['VendorResponse'];
 
 const BASE_URL = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
 
@@ -269,6 +274,52 @@ class ApiClient {
       method: 'DELETE',
       headers,
     });
+    return this.handleResponse<void>(response);
+  }
+
+  // --- Vendors ---
+  async addVendor(evaluationId: string, payload: VendorCreate): Promise<VendorResponse> {
+    const headers = await this.getAuthHeader();
+    const response = await fetch(`${BASE_URL}/api/evaluations/${evaluationId}/vendors`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...headers,
+      },
+      body: JSON.stringify(payload),
+    });
+    return this.handleResponse<VendorResponse>(response);
+  }
+
+  async renameVendor(
+    evaluationId: string,
+    vendorId: string,
+    payload: VendorUpdate
+  ): Promise<VendorResponse> {
+    const headers = await this.getAuthHeader();
+    const response = await fetch(
+      `${BASE_URL}/api/evaluations/${evaluationId}/vendors/${vendorId}`,
+      {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          ...headers,
+        },
+        body: JSON.stringify(payload),
+      }
+    );
+    return this.handleResponse<VendorResponse>(response);
+  }
+
+  async deleteVendor(evaluationId: string, vendorId: string): Promise<void> {
+    const headers = await this.getAuthHeader();
+    const response = await fetch(
+      `${BASE_URL}/api/evaluations/${evaluationId}/vendors/${vendorId}`,
+      {
+        method: 'DELETE',
+        headers,
+      }
+    );
     return this.handleResponse<void>(response);
   }
 

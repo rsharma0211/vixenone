@@ -18,14 +18,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
+import { ConfirmDialog } from '@/components/ConfirmDialog';
+import { getEvaluationEntryPath } from '@/lib/evaluationRouting';
 import { LifecycleStatus } from '@/components/status/LifecycleStatus';
 import { KpiTile } from '@/components/KpiTile';
 import { KPI_HELP_TEXT } from '@/lib/kpiHelp';
@@ -94,14 +88,7 @@ export const EvaluationsListPage: React.FC = () => {
   };
 
   const handleRowClick = (ev: EvaluationSummaryResponse) => {
-    if (ev.status === 'draft') {
-      navigate(`/evaluations/${ev.id}/upload`);
-    } else if (ev.status === 'requirements_review' || ev.status === 'stale') {
-      navigate(`/evaluations/${ev.id}/requirements`);
-    } else {
-      // analysed
-      navigate(`/evaluations/${ev.id}/comparison`);
-    }
+    navigate(getEvaluationEntryPath(ev));
   };
 
   const handleDeleteConfirm = async () => {
@@ -382,8 +369,8 @@ export const EvaluationsListPage: React.FC = () => {
               filteredEvaluations.map((ev) => {
                 const isDraft = ev.status === 'draft';
                 const subline = isDraft
-                  ? 'Mumbai · Not extracted yet'
-                  : `Mumbai · ${ev.total_requirements || 0} requirements`;
+                  ? 'Not extracted yet'
+                  : `${ev.total_requirements || 0} requirements`;
 
                 // Map lifecycle status string to LifecycleStatus component prop
                 const lifecycleProp =
@@ -477,34 +464,22 @@ export const EvaluationsListPage: React.FC = () => {
       </div>
 
       {/* Delete Confirmation Dialog */}
-      <Dialog open={evalToDelete !== null} onOpenChange={(open) => !open && setEvalToDelete(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Delete evaluation</DialogTitle>
-            <DialogDescription>
-              Are you sure you want to delete &ldquo;
-              {evalToDelete ? evalToDelete.title || evalToDelete.name : ''}
-              &rdquo;? All uploaded documents and analysis findings for this evaluation will be permanently removed.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setEvalToDelete(null)}
-              disabled={deleting}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={handleDeleteConfirm}
-              disabled={deleting}
-            >
-              {deleting ? 'Deleting...' : 'Delete evaluation'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <ConfirmDialog
+        open={evalToDelete !== null}
+        title="Delete evaluation"
+        description={
+          <>
+            Are you sure you want to delete &ldquo;
+            {evalToDelete ? evalToDelete.title || evalToDelete.name : ''}
+            &rdquo;? All uploaded documents and analysis findings for this evaluation will be
+            permanently removed.
+          </>
+        }
+        confirmLabel={deleting ? 'Deleting...' : 'Delete evaluation'}
+        busy={deleting}
+        onConfirm={handleDeleteConfirm}
+        onCancel={() => setEvalToDelete(null)}
+      />
     </div>
   );
 };

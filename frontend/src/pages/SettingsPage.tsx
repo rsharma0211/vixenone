@@ -1,18 +1,11 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
-import { useBlocker } from 'react-router-dom';
 import { Lock, Trash2, Plus, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { apiClient, ApiValidationError } from '@/lib/api/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
+import { ConfirmDialog } from '@/components/ConfirmDialog';
+import { useUnsavedChangesGuard } from '@/components/UnsavedChangesGuard';
 import type {
   EvaluationCriterionUpdateItem,
 } from '@/lib/types';
@@ -125,26 +118,8 @@ export const SettingsPage: React.FC = () => {
     return JSON.stringify(criteria) !== initialJson;
   }, [criteria, initialJson, loading]);
 
-  // Unsaved changes tab close / reload guard
-  useEffect(() => {
-    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      if (isDirty) {
-        e.preventDefault();
-        e.returnValue = '';
-      }
-    };
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, [isDirty]);
-
-  // In-app navigation blocker
-  const blocker = useBlocker(
-    useCallback(
-      ({ currentLocation, nextLocation }: { currentLocation: { pathname: string }; nextLocation: { pathname: string } }) =>
-        isDirty && currentLocation.pathname !== nextLocation.pathname,
-      [isDirty]
-    )
-  );
+  // Unsaved changes: reload/close warning and in-app navigation blocking
+  const { guardDialog } = useUnsavedChangesGuard(isDirty);
 
   // Live total weight calculation
   const totalWeight = useMemo(() => {
@@ -560,70 +535,34 @@ export const SettingsPage: React.FC = () => {
       </div>
 
       {/* Delete Confirmation Dialog */}
-      <Dialog open={deleteIndex !== null} onOpenChange={(open) => !open && setDeleteIndex(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Delete criterion</DialogTitle>
-            <DialogDescription>
-              Are you sure you want to delete &ldquo;
-              {deleteIndex !== null && criteria[deleteIndex] ? criteria[deleteIndex].name : ''}
-              &rdquo;? This change will take effect once you save your criteria.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteIndex(null)}>
-              Cancel
-            </Button>
-            <Button variant="destructive" onClick={handleConfirmDelete}>
-              Delete criterion
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <ConfirmDialog
+        open={deleteIndex !== null}
+        title="Delete criterion"
+        description={
+          <>
+            Are you sure you want to delete &ldquo;
+            {deleteIndex !== null && criteria[deleteIndex] ? criteria[deleteIndex].name : ''}
+            &rdquo;? This change will take effect once you save your criteria.
+          </>
+        }
+        confirmLabel="Delete criterion"
+        onConfirm={handleConfirmDelete}
+        onCancel={() => setDeleteIndex(null)}
+      />
 
       {/* Reset Confirmation Dialog */}
-      <Dialog open={showResetDialog} onOpenChange={setShowResetDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Reset to default criteria?</DialogTitle>
-            <DialogDescription>
-              Built-in criteria weights will return to their default values (Mandatory compliance: 35%,
-              Service coverage: 20%, Cost comparability: 20%, SLA / operational: 15%, Unresolved risks: 10%),
-              and any custom criteria you created will be permanently removed.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowResetDialog(false)}>
-              Cancel
-            </Button>
-            <Button variant="primary" onClick={handleResetToDefaults} disabled={saving}>
-              {saving ? 'Resetting...' : 'Reset to defaults'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <ConfirmDialog
+        open={showResetDialog}
+        title="Reset to default criteria?"
+        description="Built-in criteria weights will return to their default values (Mandatory compliance: 35%, Service coverage: 20%, Cost comparability: 20%, SLA / operational: 15%, Unresolved risks: 10%), and any custom criteria you created will be permanently removed."
+        confirmLabel={saving ? 'Resetting...' : 'Reset to defaults'}
+        busy={saving}
+        onConfirm={handleResetToDefaults}
+        onCancel={() => setShowResetDialog(false)}
+      />
 
       {/* In-App Navigation Unsaved Changes Dialog */}
-      {blocker && blocker.state === 'blocked' && (
-        <Dialog open={true} onOpenChange={() => blocker.reset?.()}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Unsaved changes</DialogTitle>
-              <DialogDescription>
-                You have unsaved changes to your evaluation criteria. If you leave this page now, your changes will be lost.
-              </DialogDescription>
-            </DialogHeader>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => blocker.reset?.()}>
-                Stay on page
-              </Button>
-              <Button variant="destructive" onClick={() => blocker.proceed?.()}>
-                Discard changes and leave
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      )}
+      {guardDialog}
     </div>
   );
 };

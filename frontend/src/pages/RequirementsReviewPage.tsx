@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react';
-import { useParams, useNavigate, useOutletContext, useBlocker } from 'react-router-dom';
+import { useParams, useNavigate, useOutletContext } from 'react-router-dom';
 import {
   Plus,
   Pencil,
@@ -15,14 +15,9 @@ import { apiClient, ApiHttpError, ApiValidationError } from '@/lib/api/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
+import { ConfirmDialog } from '@/components/ConfirmDialog';
+import { RerunExtractionDialog } from '@/components/RerunExtractionDialog';
+import { useUnsavedChangesGuard } from '@/components/UnsavedChangesGuard';
 import {
   Tooltip,
   TooltipContent,
@@ -63,16 +58,16 @@ export function formatRequirementSource(
       ? page
       : parseInt(String(page), 10);
   const hasPage = parsedPage !== null && !isNaN(parsedPage);
-  const cleanSection = section?.trim() || '';
+  const hasSection = Boolean(section && section.trim());
 
-  if (hasPage && cleanSection) {
-    return `p.${parsedPage} ${cleanSection}`;
+  if (hasPage && hasSection) {
+    return `p.${parsedPage} · ${section}`;
   }
   if (hasPage) {
     return `p.${parsedPage}`;
   }
-  if (cleanSection) {
-    return cleanSection;
+  if (hasSection) {
+    return section as string;
   }
   return '—';
 }
@@ -181,9 +176,9 @@ export const RequirementsReviewPage: React.FC = () => {
   const [errorBanner, setErrorBanner] = useState<string | null>(null);
   const [successBanner, setSuccessBanner] = useState<string | null>(null);
   const [serverErrors, setServerErrors] = useState<Record<string, string>>({});
-  const [showRerunConfirmDialog, setShowRerunConfirmDialog] = useState<boolean>(false);
+  const [showRerunDialog, setShowRerunDialog] = useState<boolean>(false);
+  const [rowToDelete, setRowToDelete] = useState<{ localId: string; code: string } | null>(null);
 
-  const bypassBlockerRef = useRef<boolean>(false);
   const nextLocalIdCounter = useRef<number>(1);
 
   useEffect(() => {
@@ -251,34 +246,8 @@ export const RequirementsReviewPage: React.FC = () => {
     return false;
   }, [rows, initialItems, initialByLocalId, loading, hasLoaded]);
 
-  // Browser unload warning when dirty
-  useEffect(() => {
-    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      if (isDirty) {
-        e.preventDefault();
-        e.returnValue = '';
-      }
-    };
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, [isDirty]);
-
-  // Router navigation blocker when dirty
-  const blocker = useBlocker(
-    useCallback(
-      ({
-        currentLocation,
-        nextLocation,
-      }: {
-        currentLocation: { pathname: string };
-        nextLocation: { pathname: string };
-      }) =>
-        isDirty &&
-        !bypassBlockerRef.current &&
-        currentLocation.pathname !== nextLocation.pathname,
-      [isDirty]
-    )
-  );
+  // Unsaved edits: warn on reload/close and block every in-app navigation
+  const { guardDialog, allowNavigation } = useUnsavedChangesGuard(isDirty);
 
   // Client validation: code and text required; codes unique within list
   const validationErrors = useMemo(() => {
@@ -331,6 +300,9 @@ export const RequirementsReviewPage: React.FC = () => {
     const currentHasUser = rows.some((row) => getEffectiveOrigin(row) === 'user');
     return savedHasUser || currentHasUser;
   }, [initialItems, rows, getEffectiveOrigin]);
+
+  // A re-run replaces the whole list: warn when that discards user work
+  const rerunWillLoseEdits = isDirty || hasAnyUserOriginRow;
 
   // Row edit handlers
   const handleStartRowEdit = (row: EditableRequirementRow) => {
@@ -497,43 +469,32 @@ export const RequirementsReviewPage: React.FC = () => {
     }
   };
 
-  // Re-run extraction flow
-  const executeRerunExtraction = async (confirmReplace: boolean) => {
+  // Re-run extraction: always confirmed first, then sent with confirm_replace true
+  const executeRerunExtraction = async () => {
     if (!evaluationId) return;
     try {
       setRerunning(true);
       setErrorBanner(null);
       setSuccessBanner(null);
 
-      if (confirmReplace) {
-        await apiClient.extractRequirements(evaluationId, { confirm_replace: true });
-      } else {
-        await apiClient.extractRequirements(evaluationId);
-      }
+      await apiClient.extractRequirements(evaluationId, { confirm_replace: true });
 
       await outletContext?.refresh();
 
-      bypassBlockerRef.current = true;
-      navigate(`/evaluations/${evaluationId}/upload`, {
+      // The confirmed re-run intentionally discards any unsaved edits
+      allowNavigation();
+      navigate(`/evaluations/${evaluationId}/documents`, {
         state: { fromExtractStart: true },
       });
     } catch (err: unknown) {
       if (err instanceof ApiHttpError && err.status === 409) {
-        const lowerMsg = err.message.toLowerCase();
-        if (
-          lowerMsg.includes('replace') ||
-          lowerMsg.includes('user-edited') ||
-          lowerMsg.includes('edits')
-        ) {
-          setShowRerunConfirmDialog(true);
-        } else {
-          // 409 active job -> navigate to upload screen which resumes polling
-          bypassBlockerRef.current = true;
-          navigate(`/evaluations/${evaluationId}/upload`, {
-            state: { fromExtractStart: true },
-          });
-        }
+        // A job is already active: the Documents tab shows its progress
+        allowNavigation();
+        navigate(`/evaluations/${evaluationId}/documents`, {
+          state: { fromExtractStart: true },
+        });
       } else if (err instanceof Error) {
+        // Includes 422 messages naming what is missing, shown as-is
         setErrorBanner(err.message);
       } else {
         setErrorBanner('Failed to start extraction');
@@ -544,16 +505,12 @@ export const RequirementsReviewPage: React.FC = () => {
   };
 
   const handleClickRerunExtraction = () => {
-    if (hasAnyUserOriginRow) {
-      setShowRerunConfirmDialog(true);
-    } else {
-      executeRerunExtraction(false);
-    }
+    setShowRerunDialog(true);
   };
 
   const handleConfirmRerunExtraction = async () => {
-    setShowRerunConfirmDialog(false);
-    await executeRerunExtraction(true);
+    setShowRerunDialog(false);
+    await executeRerunExtraction();
   };
 
   if (loading && !hasLoaded && rows.length === 0) {
@@ -892,7 +849,7 @@ export const RequirementsReviewPage: React.FC = () => {
                         </td>
 
                         {/* Source Column */}
-                        <td className="py-3.5 px-4 text-xs text-muted whitespace-nowrap">
+                        <td className="py-3.5 px-4 text-xs text-muted break-words">
                           {isEditing ? (
                             <div className="flex items-center gap-1.5">
                               <Input
@@ -967,7 +924,9 @@ export const RequirementsReviewPage: React.FC = () => {
                               </button>
                               <button
                                 type="button"
-                                onClick={() => handleDeleteRow(row.localId)}
+                                onClick={() =>
+                                  setRowToDelete({ localId: row.localId, code: row.code })
+                                }
                                 aria-label={`Delete ${row.code}`}
                                 className="p-1.5 text-muted hover:text-status-noncompliant-text rounded hover:bg-surface transition-colors"
                               >
@@ -989,57 +948,30 @@ export const RequirementsReviewPage: React.FC = () => {
           </div>
         )}
 
-        {/* Re-run Extraction Confirm Dialog (when user-origin requirements exist) */}
-        <Dialog
-          open={showRerunConfirmDialog}
-          onOpenChange={setShowRerunConfirmDialog}
-        >
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Replace edited requirements?</DialogTitle>
-              <DialogDescription>
-                Your edits to the requirements will be replaced
-              </DialogDescription>
-            </DialogHeader>
-            <DialogFooter>
-              <Button
-                variant="outline"
-                onClick={() => setShowRerunConfirmDialog(false)}
-              >
-                Cancel
-              </Button>
-              <Button
-                variant="primary"
-                onClick={handleConfirmRerunExtraction}
-                disabled={rerunning}
-              >
-                Confirm
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+        {/* Re-run extraction: always confirm */}
+        <RerunExtractionDialog
+          open={showRerunDialog}
+          hasEdits={rerunWillLoseEdits}
+          busy={rerunning}
+          onConfirm={handleConfirmRerunExtraction}
+          onCancel={() => setShowRerunDialog(false)}
+        />
 
-        {/* Unsaved Changes Navigation Blocker Dialog */}
-        {blocker && blocker.state === 'blocked' && (
-          <Dialog open={true} onOpenChange={() => blocker.reset?.()}>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Unsaved changes</DialogTitle>
-                <DialogDescription>
-                  You have unsaved changes to your requirements. If you leave this page now, your changes will be lost.
-                </DialogDescription>
-              </DialogHeader>
-              <DialogFooter>
-                <Button variant="outline" onClick={() => blocker.reset?.()}>
-                  Stay on page
-                </Button>
-                <Button variant="destructive" onClick={() => blocker.proceed?.()}>
-                  Discard changes and leave
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-        )}
+        {/* Delete requirement row: confirm first */}
+        <ConfirmDialog
+          open={rowToDelete !== null}
+          title={rowToDelete ? `Delete ${rowToDelete.code || 'requirement'}` : 'Delete requirement'}
+          description="Removed from the list when you save."
+          confirmLabel="Delete requirement"
+          onConfirm={() => {
+            if (rowToDelete) handleDeleteRow(rowToDelete.localId);
+            setRowToDelete(null);
+          }}
+          onCancel={() => setRowToDelete(null)}
+        />
+
+        {/* Unsaved changes: in-app navigation blocker dialog */}
+        {guardDialog}
       </div>
     </TooltipProvider>
   );

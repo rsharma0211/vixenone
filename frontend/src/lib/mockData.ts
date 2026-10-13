@@ -18,7 +18,6 @@ export interface Evaluation {
   name: string;
   name_short: string;
   category: string;
-  location: string;
   contract_type: string;
   total_requirements: number;
   mandatory_requirements: number;
@@ -139,7 +138,6 @@ export const mockEvaluations: Evaluation[] = [
     name: 'Housekeeping Services — Andheri East Office, FY 2026–27',
     name_short: 'Housekeeping — Andheri East',
     category: 'Facilities / Housekeeping',
-    location: 'Mumbai',
     contract_type: 'Monthly contract',
     total_requirements: 18,
     mandatory_requirements: 6,
@@ -160,7 +158,6 @@ export const mockEvaluations: Evaluation[] = [
     name: 'Security Services — Powai Campus',
     name_short: 'Security — Powai Campus',
     category: 'Facilities / Security',
-    location: 'Mumbai',
     contract_type: 'Monthly contract',
     total_requirements: 14,
     mandatory_requirements: 5,
@@ -181,7 +178,6 @@ export const mockEvaluations: Evaluation[] = [
     name: 'Pantry & Cafeteria — BKC Office',
     name_short: 'Pantry & Cafeteria — BKC',
     category: 'Facilities / Housekeeping',
-    location: 'Mumbai',
     contract_type: 'Monthly contract',
     total_requirements: 12,
     mandatory_requirements: 4,
@@ -202,7 +198,6 @@ export const mockEvaluations: Evaluation[] = [
     name: 'Pest Control AMC — Thane Warehouse',
     name_short: 'Pest Control AMC — Thane Warehouse',
     category: 'Facilities / Housekeeping',
-    location: 'Thane',
     contract_type: 'Annual contract',
     total_requirements: 8,
     mandatory_requirements: 3,

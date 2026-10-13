@@ -11,6 +11,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { apiClient } from '@/lib/api/client';
+import { getEvaluationEntryPath } from '@/lib/evaluationRouting';
 import type { EvaluationSummaryResponse } from '@/lib/types';
 
 interface SidebarProps {
@@ -135,15 +136,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ collapsed }) => {
                     <button
                       key={ev.id}
                       type="button"
-                      onClick={() =>
-                        navigate(
-                          ev.status === 'draft'
-                            ? `/evaluations/${ev.id}/upload`
-                            : ev.status === 'requirements_review' || ev.status === 'stale'
-                            ? `/evaluations/${ev.id}/requirements`
-                            : `/evaluations/${ev.id}/comparison`
-                        )
-                      }
+                      onClick={() => navigate(getEvaluationEntryPath(ev))}
                       title={ev.title || ev.name}
                       className={cn(
                         "w-full text-left px-3 py-1.5 rounded-md text-xs truncate transition-colors block",

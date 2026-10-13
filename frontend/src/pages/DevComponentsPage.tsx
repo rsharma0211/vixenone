@@ -235,7 +235,7 @@ export const DevComponentsPage: React.FC = () => {
           </div>
           <div>
             <div className="text-xs text-muted">Meta (12/500):</div>
-            <div className="text-meta text-muted">Updated 12 Oct 2026 · Mumbai</div>
+            <div className="text-meta text-muted">Updated 12 Oct 2026</div>
           </div>
           <div>
             <div className="text-xs text-muted">Tabular Figures (14px):</div>

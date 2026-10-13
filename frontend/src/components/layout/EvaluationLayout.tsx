@@ -68,6 +68,7 @@ export const EvaluationLayout: React.FC = () => {
   const category = evaluationDetail?.category || '';
 
   const tabs = [
+    { name: 'Documents', path: `/evaluations/${id}/documents` },
     { name: 'Requirements', path: `/evaluations/${id}/requirements` },
     { name: 'Comparison', path: `/evaluations/${id}/comparison` },
     { name: 'Recommendation', path: `/evaluations/${id}/recommendation` },
@@ -93,7 +94,7 @@ export const EvaluationLayout: React.FC = () => {
         </h1>
 
         <p className="text-body text-muted">
-          Mumbai · {category ? `${category} · ` : ''}
+          {category ? `${category} · ` : ''}
           {savedRequirementCount} requirement{savedRequirementCount === 1 ? '' : 's'} (
           {savedMandatoryCount} mandatory)
         </p>

@@ -8,6 +8,7 @@ import { AuthPage } from '@/pages/AuthPage';
 import { DevComponentsPage } from '@/pages/DevComponentsPage';
 import { EvaluationsListPage } from '@/pages/EvaluationsListPage';
 import { NewEvaluationPage } from '@/pages/NewEvaluationPage';
+import { DocumentsPage } from '@/pages/DocumentsPage';
 import { SettingsPage } from '@/pages/SettingsPage';
 import { ProfilePage } from '@/pages/ProfilePage';
 import { RequirementsReviewPage } from '@/pages/RequirementsReviewPage';
@@ -42,10 +43,6 @@ const router = createBrowserRouter([
         element: <NewEvaluationPage />,
       },
       {
-        path: '/evaluations/:id/upload',
-        element: <NewEvaluationPage />,
-      },
-      {
         path: '/settings',
         element: <SettingsPage />,
       },
@@ -64,6 +61,15 @@ const router = createBrowserRouter([
           {
             index: true,
             element: <Navigate to="requirements" replace />,
+          },
+          {
+            path: 'documents',
+            element: <DocumentsPage />,
+          },
+          {
+            // Legacy upload route: redirects to the Documents tab
+            path: 'upload',
+            element: <Navigate to="../documents" replace />,
           },
           {
             path: 'requirements',

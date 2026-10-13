@@ -77,6 +77,41 @@ export interface paths {
         patch: operations["update_evaluation_api_evaluations__id__patch"];
         trace?: never;
     };
+    "/api/evaluations/{id}/vendors": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Add Vendor */
+        post: operations["add_vendor_api_evaluations__id__vendors_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/evaluations/{id}/vendors/{vendor_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Vendor */
+        delete: operations["delete_vendor_api_evaluations__id__vendors__vendor_id__delete"];
+        options?: never;
+        head?: never;
+        /** Rename Vendor */
+        patch: operations["rename_vendor_api_evaluations__id__vendors__vendor_id__patch"];
+        trace?: never;
+    };
     "/api/evaluations/{id}/documents": {
         parameters: {
             query?: never;
@@ -374,8 +409,10 @@ export interface components {
             title: string;
             /** Category */
             category: string;
+            /** Location */
+            location?: string | null;
             /** Vendor Names */
-            vendor_names: string[];
+            vendor_names?: string[] | null;
         };
         /** EvaluationCriterionResponse */
         EvaluationCriterionResponse: {
@@ -706,6 +743,11 @@ export interface components {
             /** Error Type */
             type: string;
         };
+        /** VendorCreate */
+        VendorCreate: {
+            /** Name */
+            name: string;
+        };
         /** VendorResponse */
         VendorResponse: {
             /**
@@ -765,6 +807,11 @@ export interface components {
              * @default false
              */
             incomplete: boolean;
+        };
+        /** VendorUpdate */
+        VendorUpdate: {
+            /** Name */
+            name: string;
         };
     };
     responses: never;
@@ -1016,6 +1063,107 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EvaluationDetailResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    add_vendor_api_evaluations__id__vendors_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VendorCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VendorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_vendor_api_evaluations__id__vendors__vendor_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                vendor_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    rename_vendor_api_evaluations__id__vendors__vendor_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                vendor_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VendorUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VendorResponse"];
                 };
             };
             /** @description Validation Error */
