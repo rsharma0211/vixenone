@@ -83,26 +83,36 @@ Production deployment uses only Google Cloud and Firebase tools:
      make deploy-config
      ```
 
-2. **Deploy to production**:
-   - Run the complete automated deployment pipeline:
+2. **Deploy to production (no `make up` needed)**:
+   The local Compose stack does not need to be running. Frontend builds run in an isolated one-off container without starting dependent services or publishing ports.
+
+   - **Deploy everything (full stack)**:
      ```bash
      make deploy
      ```
      (Supports `make deploy DRY_RUN=1` to preview all commands without modifying cloud resources).
-     This executes in order:
-     - Configuration check (`deploy-config`)
+     This executes in strict sequence, stopping immediately on any error:
+     - Configuration validation (`deploy-config`, masks secrets)
      - Production API image build with Cloud Build (`build-api`)
      - Database migrations execution via Cloud Run prepare job (`migrate`)
      - Cloud Run service deployment for `vixenone-api` (`deploy-api`)
-     - Frontend production build in web container (`build-web`)
+     - Frontend production build in one-off container (`build-web`, deletes previous build output first)
+     - Bundle validation (`bundle-check`, verifies production API key presence and rejects test tokens/localhost URLs)
      - Firebase Hosting deployment (`deploy-web`)
-     - Smoke test verification (`smoke`)
+     - Smoke test verification (`prod-smoke`)
+
+   - **Deploy web only**:
+     ```bash
+     make deploy-web
+     ```
+     (Supports `make deploy-web DRY_RUN=1`).
+     Always runs `build-web` in a one-off container, runs `bundle-check` to verify credentials, and only then deploys to Firebase Hosting. There is no way to deploy without building and verifying first.
 
 3. **Seed demo data (first deploy only)**:
    ```bash
    make prod-seed
    ```
-   > **Note:** Re-seeding wipes existing demo-user evaluations. You will be prompted to confirm by typing the production project ID. This is never run automatically as part of `make deploy`.
+   > **Note:** Re-seeding wipes existing demo-user evaluations. You will be prompted to confirm by typing the production project ID from an interactive terminal. If no terminal is available, the command aborts. This is never run automatically as part of `make deploy`.
 
 4. **Verify production health**:
    ```bash

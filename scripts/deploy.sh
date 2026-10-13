@@ -22,7 +22,7 @@ for arg in "$@"; do
 done
 
 if [ -z "$COMMAND" ]; then
-  echo "Usage: $0 [--dry-run] <config|build-api|migrate|deploy-api|build-web|deploy-web|smoke|seed|deploy>" >&2
+  echo "Usage: $0 [--dry-run] <config|build-api|migrate|deploy-api|build-web|bundle-check|deploy-web|smoke|seed|deploy>" >&2
   exit 1
 fi
 
@@ -37,8 +37,10 @@ load_config() {
     [[ "$key" =~ ^#.* ]] && continue
     [ -z "$key" ] && continue
     if [[ "$key" == PROD_* ]]; then
-      val=$(echo "$val" | tr -d '\r' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's/^"//' -e 's/"$//' -e "s/^'//" -e "s/'$//")
-      export "$key=$val"
+      if [ -z "${!key+x}" ]; then
+        val=$(echo "$val" | tr -d '\r' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's/^"//' -e 's/"$//' -e "s/^'//" -e "s/'$//")
+        export "$key=$val"
+      fi
     fi
   done < "$ENV_FILE"
 
@@ -96,7 +98,7 @@ step_config() {
   echo "  PROD_SERVICE_ACCOUNT:      ${PROD_SERVICE_ACCOUNT}"
   echo "  PROD_BUCKET:               ${PROD_BUCKET}"
   echo "  PROD_GEMINI_MODEL:         ${PROD_GEMINI_MODEL}"
-  echo "  PROD_FIREBASE_API_KEY:     ${PROD_FIREBASE_API_KEY}"
+  echo "  PROD_FIREBASE_API_KEY:     [configured]"
   echo "  PROD_FIREBASE_AUTH_DOMAIN: ${PROD_FIREBASE_AUTH_DOMAIN}"
   echo "  PROD_FIREBASE_PROJECT_ID:  ${PROD_FIREBASE_PROJECT_ID}"
 }
@@ -108,8 +110,12 @@ step_build_api() {
   cd "${REPO_ROOT}"
   UNCOMMITTED=$(git status --porcelain | grep -v '^[?]\{2\} dataset/' || true)
   if [ -n "$UNCOMMITTED" ]; then
-    echo "Refusal: Git working tree has uncommitted changes. Commit or stash them before deploying." >&2
-    exit 1
+    if [ "$DRY_RUN" = "1" ]; then
+      echo "[dry-run] Git working tree check: uncommitted changes detected (real deploy will refuse)."
+    else
+      echo "Refusal: Git working tree has uncommitted changes. Commit or stash them before deploying." >&2
+      exit 1
+    fi
   fi
 
   echo "Building production API image with Cloud Build (tag: ${COMMIT_SHA})..."
@@ -163,32 +169,75 @@ step_deploy_api() {
 
 step_build_web() {
   load_config
-  echo "Building production frontend in web container..."
+  echo "Building production frontend in one-off web container..."
   if [ "$DRY_RUN" = "1" ]; then
-    echo "[dry-run] docker compose exec -T -e VITE_FIREBASE_API_KEY=\"${PROD_FIREBASE_API_KEY}\" -e VITE_FIREBASE_AUTH_DOMAIN=\"${PROD_FIREBASE_AUTH_DOMAIN}\" -e VITE_FIREBASE_PROJECT_ID=\"${PROD_FIREBASE_PROJECT_ID}\" -e VITE_FIREBASE_AUTH_EMULATOR_HOST=\"\" -e VITE_API_BASE_URL=\"\" web npm run build"
-  else
-    cd "${REPO_ROOT}"
-    if docker compose ps --services --filter "status=running" | grep -q "^web$"; then
-      docker compose exec -T \
-        -e VITE_FIREBASE_API_KEY="${PROD_FIREBASE_API_KEY}" \
-        -e VITE_FIREBASE_AUTH_DOMAIN="${PROD_FIREBASE_AUTH_DOMAIN}" \
-        -e VITE_FIREBASE_PROJECT_ID="${PROD_FIREBASE_PROJECT_ID}" \
-        -e VITE_FIREBASE_AUTH_EMULATOR_HOST="" \
-        -e VITE_API_BASE_URL="" \
-        web npm run build
-    else
-      docker compose run --rm -T \
-        -e VITE_FIREBASE_API_KEY="${PROD_FIREBASE_API_KEY}" \
-        -e VITE_FIREBASE_AUTH_DOMAIN="${PROD_FIREBASE_AUTH_DOMAIN}" \
-        -e VITE_FIREBASE_PROJECT_ID="${PROD_FIREBASE_PROJECT_ID}" \
-        -e VITE_FIREBASE_AUTH_EMULATOR_HOST="" \
-        -e VITE_API_BASE_URL="" \
-        web npm run build
-    fi
+    echo "[dry-run] rm -rf ${REPO_ROOT}/frontend/dist"
+    echo "[dry-run] docker compose run --rm --no-deps -T -e VITE_FIREBASE_API_KEY=\"***\" -e VITE_FIREBASE_AUTH_DOMAIN=\"${PROD_FIREBASE_AUTH_DOMAIN}\" -e VITE_FIREBASE_PROJECT_ID=\"${PROD_FIREBASE_PROJECT_ID}\" -e VITE_FIREBASE_AUTH_EMULATOR_HOST=\"\" -e VITE_API_BASE_URL=\"\" web npm run build"
+    return 0
   fi
+
+  rm -rf "${REPO_ROOT}/frontend/dist"
+  cd "${REPO_ROOT}"
+  docker compose run --rm --no-deps -T \
+    -e VITE_FIREBASE_API_KEY="${PROD_FIREBASE_API_KEY}" \
+    -e VITE_FIREBASE_AUTH_DOMAIN="${PROD_FIREBASE_AUTH_DOMAIN}" \
+    -e VITE_FIREBASE_PROJECT_ID="${PROD_FIREBASE_PROJECT_ID}" \
+    -e VITE_FIREBASE_AUTH_EMULATOR_HOST="" \
+    -e VITE_API_BASE_URL="" \
+    web npm run build
+}
+
+step_bundle_check() {
+  load_config
+  echo "Checking built bundle in frontend/dist..."
+  if [ "$DRY_RUN" = "1" ]; then
+    echo "[dry-run] Bundle check: verify PROD_FIREBASE_API_KEY presence and reject forbidden tokens in frontend/dist"
+    return 0
+  fi
+
+  DIST_DIR="${REPO_ROOT}/frontend/dist"
+  if [ ! -d "$DIST_DIR" ] || [ -z "$(ls -A "$DIST_DIR" 2>/dev/null)" ]; then
+    echo "Bundle check FAILED: Build directory ${DIST_DIR} not found or empty. Run build-web first." >&2
+    exit 1
+  fi
+
+  # Rule 1: PROD_FIREBASE_API_KEY must be present in the bundle
+  if grep -q -r -F "$PROD_FIREBASE_API_KEY" "$DIST_DIR"; then
+    echo "  [PASS] Production Firebase API key present in bundle."
+  else
+    echo "Bundle check FAILED: Production Firebase API key not found in built bundle." >&2
+    exit 1
+  fi
+
+  # Rule 2: Prohibited test tokens and localhost references
+  FORBIDDEN_TOKENS=(
+    "dummy-key"
+    "test-key"
+    "fake-api-key"
+    "localhost:8000"
+    "localhost:9099"
+  )
+
+  FORBIDDEN_FOUND=0
+  for token in "${FORBIDDEN_TOKENS[@]}"; do
+    if grep -q -r -F "$token" "$DIST_DIR"; then
+      echo "Bundle check FAILED: Forbidden token '$token' found in built bundle." >&2
+      FORBIDDEN_FOUND=1
+    fi
+  done
+
+  if [ "$FORBIDDEN_FOUND" -ne 0 ]; then
+    echo "Bundle check ABORTED: One or more forbidden tokens detected in bundle." >&2
+    exit 1
+  fi
+
+  echo "  [PASS] No forbidden test tokens or localhost URLs found in bundle."
+  echo "Bundle check PASSED."
 }
 
 step_deploy_web() {
+  step_build_web
+  step_bundle_check
   load_config
   echo "Deploying frontend to Firebase Hosting..."
   run_cloud_cmd firebase deploy --only hosting --project "${PROD_PROJECT_ID}"
@@ -229,24 +278,39 @@ step_smoke() {
 step_seed() {
   load_config
   if [ "$DRY_RUN" = "1" ]; then
-    echo "[dry-run] Confirmation check: require typing project id '${PROD_PROJECT_ID}'"
+    echo "[dry-run] Confirmation check: require typing project id '${PROD_PROJECT_ID}' from terminal"
     echo "[dry-run] gcloud run jobs execute vixenone-prepare --project \"${PROD_PROJECT_ID}\" --region \"${PROD_REGION}\" --args=\"prepare,seed\" --wait"
-  else
-    echo "WARNING: Running seed will wipe demo-user evaluations in project '${PROD_PROJECT_ID}'."
-    echo -n "Type the project id '${PROD_PROJECT_ID}' to confirm: "
-    read -r CONFIRM_PROJECT
-    if [ "$CONFIRM_PROJECT" != "$PROD_PROJECT_ID" ]; then
-      echo "Aborting: confirmation '${CONFIRM_PROJECT}' did not match '${PROD_PROJECT_ID}'." >&2
-      exit 1
-    fi
-
-    echo "Executing prepare job in mode seed..."
-    run_cloud_cmd gcloud run jobs execute vixenone-prepare \
-      --project "${PROD_PROJECT_ID}" \
-      --region "${PROD_REGION}" \
-      --args="prepare,seed" \
-      --wait
+    return 0
   fi
+
+  if ! [ -e /dev/tty ] || ! (exec 3</dev/tty) 2>/dev/null; then
+    echo "Error: No terminal available for confirmation prompt. Aborting." >&2
+    exit 1
+  fi
+
+  echo "WARNING: Running seed will wipe demo-user evaluations in project '${PROD_PROJECT_ID}'."
+  echo -n "Type the project id '${PROD_PROJECT_ID}' to confirm: "
+  read -r CONFIRM_PROJECT </dev/tty
+  if [ "$CONFIRM_PROJECT" != "$PROD_PROJECT_ID" ]; then
+    echo "Aborting: confirmation '${CONFIRM_PROJECT}' did not match '${PROD_PROJECT_ID}'." >&2
+    exit 1
+  fi
+
+  echo "Executing prepare job in mode seed..."
+  run_cloud_cmd gcloud run jobs execute vixenone-prepare \
+    --project "${PROD_PROJECT_ID}" \
+    --region "${PROD_REGION}" \
+    --args="prepare,seed" \
+    --wait
+}
+
+step_deploy() {
+  step_config
+  step_build_api
+  step_migrate
+  step_deploy_api
+  step_deploy_web
+  step_smoke
 }
 
 case "$COMMAND" in
@@ -267,6 +331,9 @@ case "$COMMAND" in
   build-web)
     step_build_web
     ;;
+  bundle-check)
+    step_bundle_check
+    ;;
   deploy-web)
     step_deploy_web
     ;;
@@ -277,13 +344,7 @@ case "$COMMAND" in
     step_seed
     ;;
   deploy)
-    step_config
-    step_build_api
-    step_migrate
-    step_deploy_api
-    step_build_web
-    step_deploy_web
-    step_smoke
+    step_deploy
     ;;
   *)
     echo "Unknown command: $COMMAND" >&2

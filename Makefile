@@ -1,4 +1,4 @@
-.PHONY: help up down logs seed prepare reset migrate db-shell test types lint lint-fix lint-api lint-fix-api type-check type-check-api cloud-login cloud-config cloud-check deploy-config deploy-api deploy-web deploy prod-smoke prod-seed
+.PHONY: help up down logs seed prepare reset migrate db-shell test types lint lint-fix lint-api lint-fix-api type-check type-check-api cloud-login cloud-config cloud-check deploy-config deploy-api build-web bundle-check deploy-web deploy prod-smoke prod-seed
 
 DRY_RUN ?= 0
 DRY_FLAG = $(if $(filter 1 true TRUE yes,$(DRY_RUN)),--dry-run,)
@@ -23,7 +23,9 @@ help:
 	@echo "  make cloud-check  - Verify active account, project, Cloud SQL, buckets, secrets, and Firebase"
 	@echo "  make deploy-config - Validate and print production environment configuration"
 	@echo "  make deploy-api   - Build production API image, apply migrations, and deploy Cloud Run service"
-	@echo "  make deploy-web   - Build frontend in web container and deploy to Firebase Hosting"
+	@echo "  make build-web    - Build frontend in one-off container without dev stack (DRY_RUN=1 supported)"
+	@echo "  make bundle-check - Verify built bundle for production API key and absence of test tokens"
+	@echo "  make deploy-web   - Build frontend, run bundle check, and deploy to Firebase Hosting"
 	@echo "  make deploy       - Full production deploy (config, api, web, smoke check; DRY_RUN=1 supported)"
 	@echo "  make prod-smoke   - Run smoke check against production deployment"
 	@echo "  make prod-seed    - Seed demo user in production Cloud Run job (prompts for confirmation)"
@@ -134,6 +136,12 @@ deploy-config:
 
 deploy-api:
 	@./scripts/deploy.sh $(DRY_FLAG) deploy-api
+
+build-web:
+	@./scripts/deploy.sh $(DRY_FLAG) build-web
+
+bundle-check:
+	@./scripts/deploy.sh $(DRY_FLAG) bundle-check
 
 deploy-web:
 	@./scripts/deploy.sh $(DRY_FLAG) deploy-web
