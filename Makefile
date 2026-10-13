@@ -1,17 +1,20 @@
-.PHONY: help up down logs seed prepare reset migrate db-shell test types lint lint-api type-check type-check-api
+.PHONY: help up down logs seed prepare reset migrate db-shell test types lint lint-api type-check type-check-api cloud-login cloud-config cloud-check
 
 help:
 	@echo "Available commands:"
-	@echo "  make up        - Build and start full stack (postgres, auth emulator, api, web)"
-	@echo "  make down      - Gracefully stop full stack (persists emulator and db data)"
-	@echo "  make logs      - Follow container logs"
-	@echo "  make seed      - Seed demo user (demo@vixenone.app / demo1234) into Auth emulator"
-	@echo "  make reset     - Stop stack, wipe db volume, emulator data & uploads, start fresh"
-	@echo "  make migrate   - Run Alembic database migrations"
-	@echo "  make db-shell  - Open psql shell inside postgres container"
-	@echo "  make test      - Run backend unit tests inside api container"
-	@echo "  make types     - Generate frontend types from OpenAPI schema"
-	@echo "  make lint      - Run basic lint/syntax checks"
+	@echo "  make up          - Build and start full stack (postgres, auth emulator, api, web)"
+	@echo "  make down        - Gracefully stop full stack (persists emulator and db data)"
+	@echo "  make logs        - Follow container logs"
+	@echo "  make seed        - Seed demo user (demo@vixenone.app / demo1234) into Auth emulator"
+	@echo "  make reset       - Stop stack, wipe db volume, emulator data & uploads, start fresh"
+	@echo "  make migrate     - Run Alembic database migrations"
+	@echo "  make db-shell    - Open psql shell inside postgres container"
+	@echo "  make test        - Run backend unit tests inside api container"
+	@echo "  make types       - Generate frontend types from OpenAPI schema"
+	@echo "  make lint        - Run basic lint/syntax checks"
+	@echo "  make cloud-login  - Authenticate gcloud, ADC, and Firebase via interactive terminal"
+	@echo "  make cloud-config - Set gcloud project (vixenone) and region (asia-south1)"
+	@echo "  make cloud-check  - Verify active account, project, Cloud SQL, buckets, secrets, and Firebase"
 
 up:
 	@mkdir -p emulator-data uploads
@@ -76,3 +79,31 @@ type-check-api:
 	else \
 		docker compose run --rm -T api mypy app; \
 	fi
+
+cloud-login:
+	./scripts/cloud-tools.sh gcloud auth login --no-browser
+	./scripts/cloud-tools.sh gcloud auth application-default login --no-browser
+	./scripts/cloud-tools.sh firebase login --no-localhost
+
+cloud-config:
+	./scripts/cloud-tools.sh gcloud config set project vixenone
+	./scripts/cloud-tools.sh gcloud config set compute/region asia-south1
+
+cloud-check:
+	@echo "=== Active Account ==="
+	@./scripts/cloud-tools.sh gcloud auth list --filter=status:ACTIVE
+	@echo ""
+	@echo "=== Active Project ==="
+	@./scripts/cloud-tools.sh gcloud config get-value project
+	@echo ""
+	@echo "=== Cloud SQL Instances ==="
+	@./scripts/cloud-tools.sh gcloud sql instances list
+	@echo ""
+	@echo "=== Cloud Storage Buckets ==="
+	@./scripts/cloud-tools.sh gcloud storage buckets list
+	@echo ""
+	@echo "=== Secrets ==="
+	@./scripts/cloud-tools.sh gcloud secrets list
+	@echo ""
+	@echo "=== Firebase Projects ==="
+	@./scripts/cloud-tools.sh firebase projects:list

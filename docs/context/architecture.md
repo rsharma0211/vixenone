@@ -126,6 +126,12 @@ The local development stack consists of four Docker containers on a shared bridg
    - Mock Data Module: Strongly-typed demo dataset with 4 evaluations, 3 vendors, 8 requirements, 8x3 compliance matrix, cost breakdown with 18% GST, and deterministic scoring (64 / 86 / 58). (Isolated; not imported by live settings, profile, list, or create/upload pages).
    - Depends on healthy `api`.
 
+5. **`cloud-tools` (Host Tools Runner)**:
+   - On-demand container built from `infra/docker/tools/Dockerfile` based on `google/cloud-sdk:588.0.0-slim` with Node LTS (`node:20.18.0-bookworm-slim`) and Firebase CLI (`firebase-tools@13.29.1`).
+   - Run via `scripts/cloud-tools.sh` mounting the repository at `/workspace` with interactive terminal pass-through (`-i` / `-it`).
+   - Auth and session state persisted strictly in named Docker volumes (`vixenone_gcloud_config` at `/root/.config/gcloud`, `vixenone_firebase_config` at `/root/.config/configstore`, `vixenone_firebase_home` at `/root/.firebase`), keeping all cloud credentials off the repository filesystem.
+   - Orchestrated via `make cloud-login`, `make cloud-config`, and `make cloud-check`.
+
 ## Startup Sequence & Healthchecks
 
 1. `postgres` and `firebase-auth-emulator` boot and become healthy.

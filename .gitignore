@@ -45,6 +45,11 @@ service-account.json
 serviceAccountKey.json
 credentials.json
 
+# Cloud SDK & Application Default Credentials
+.gcloud/
+*application_default_credentials*.json
+*application-default-credentials*.json
+
 # Uploads & Database
 uploads/
 *.sql
