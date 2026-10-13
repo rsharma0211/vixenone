@@ -129,6 +129,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/evaluations/{id}/extract": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Extract Requirements */
+        post: operations["extract_requirements_api_evaluations__id__extract_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/evaluations/{id}/jobs/latest": {
         parameters: {
             query?: never;
@@ -226,6 +243,10 @@ export interface components {
             started_at: string;
             /** Finished At */
             finished_at?: string | null;
+            /** Created At */
+            created_at?: string | null;
+            /** Updated At */
+            updated_at?: string | null;
         };
         /** Body_upload_document_api_evaluations__id__documents_post */
         Body_upload_document_api_evaluations__id__documents_post: {
@@ -529,6 +550,14 @@ export interface components {
             /** Evaluations */
             evaluations: components["schemas"]["EvaluationSummaryResponse"][];
             kpis: components["schemas"]["EvaluationKPIs"];
+        };
+        /** ExtractRequirementsRequest */
+        ExtractRequirementsRequest: {
+            /**
+             * Confirm Replace
+             * @default false
+             */
+            confirm_replace: boolean;
         };
         /** FindingEvidence */
         FindingEvidence: {
@@ -1118,6 +1147,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RequirementItem"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    extract_requirements_api_evaluations__id__extract_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["ExtractRequirementsRequest"] | null;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnalysisJobResponse"];
                 };
             };
             /** @description Validation Error */

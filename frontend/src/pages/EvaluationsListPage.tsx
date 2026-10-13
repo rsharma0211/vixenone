@@ -94,10 +94,10 @@ export const EvaluationsListPage: React.FC = () => {
   const handleRowClick = (ev: EvaluationSummaryResponse) => {
     if (ev.status === 'draft') {
       navigate(`/evaluations/${ev.id}/upload`);
-    } else if (ev.status === 'requirements_review') {
+    } else if (ev.status === 'requirements_review' || ev.status === 'stale') {
       navigate(`/evaluations/${ev.id}/requirements`);
     } else {
-      // analysed or stale
+      // analysed
       navigate(`/evaluations/${ev.id}/comparison`);
     }
   };

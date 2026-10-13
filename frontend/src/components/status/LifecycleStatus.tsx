@@ -6,6 +6,8 @@ export type LifecycleStatusType =
   | 'Requirements review'
   | 'Analysed'
   | 'Stale'
+  | 'Uploaded'
+  | 'Reading'
   | 'Ready'
   | 'Processing'
   | 'Error';
@@ -39,8 +41,10 @@ export const LifecycleStatus: React.FC<LifecycleStatusProps> = ({
     'Requirements review': 'bg-lifecycle-blue',
     'Analysed': 'bg-status-compliant-text',
     'Stale': 'bg-status-partial-text',
+    'Uploaded': 'bg-muted',
+    'Reading': 'bg-lifecycle-blue animate-pulse',
     'Ready': 'bg-status-compliant-text',
-    'Processing': 'bg-lifecycle-blue',
+    'Processing': 'bg-lifecycle-blue animate-pulse',
     'Error': 'bg-status-noncompliant-text',
   };
 

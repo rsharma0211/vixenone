@@ -26,6 +26,7 @@ export type DocumentStatus = Schemas['DocumentStatus'];
 // Requirements
 export type RequirementItem = Schemas['RequirementItem'];
 export type RequirementOrigin = Schemas['RequirementOrigin'];
+export type ExtractRequirementsRequest = Schemas['ExtractRequirementsRequest'];
 
 // Jobs
 export type AnalysisJobResponse = Schemas['AnalysisJobResponse'];

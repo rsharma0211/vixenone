@@ -139,7 +139,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ collapsed }) => {
                         navigate(
                           ev.status === 'draft'
                             ? `/evaluations/${ev.id}/upload`
-                            : ev.status === 'requirements_review'
+                            : ev.status === 'requirements_review' || ev.status === 'stale'
                             ? `/evaluations/${ev.id}/requirements`
                             : `/evaluations/${ev.id}/comparison`
                         )

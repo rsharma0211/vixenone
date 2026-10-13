@@ -10,6 +10,7 @@ import { EvaluationsListPage } from '@/pages/EvaluationsListPage';
 import { NewEvaluationPage } from '@/pages/NewEvaluationPage';
 import { SettingsPage } from '@/pages/SettingsPage';
 import { ProfilePage } from '@/pages/ProfilePage';
+import { RequirementsReviewPage } from '@/pages/RequirementsReviewPage';
 import { EvaluationTabPlaceholder } from '@/pages/EvaluationTabPlaceholder';
 
 const router = createBrowserRouter([
@@ -66,7 +67,7 @@ const router = createBrowserRouter([
           },
           {
             path: 'requirements',
-            element: <EvaluationTabPlaceholder />,
+            element: <RequirementsReviewPage />,
           },
           {
             path: 'comparison',

@@ -9,6 +9,7 @@ import type {
   EvaluationUpdate,
   DocumentResponse,
   RequirementItem,
+  ExtractRequirementsRequest,
   AnalysisJobResponse,
   EvaluationResultsResponse,
 } from '@/lib/types';
@@ -28,19 +29,27 @@ export interface UserProfileUpdatePayload {
   role?: UserRole;
 }
 
-export class ApiValidationError extends Error {
+export class ApiHttpError extends Error {
+  public status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = 'ApiHttpError';
+    this.status = status;
+  }
+}
+
+export class ApiValidationError extends ApiHttpError {
   public fieldErrors: Record<string, string>;
   public generalErrors: string[];
-  public status: number;
 
   constructor(
     message: string,
     fieldErrors: Record<string, string> = {},
     generalErrors: string[] = []
   ) {
-    super(message);
+    super(message, 422);
     this.name = 'ApiValidationError';
-    this.status = 422;
     this.fieldErrors = fieldErrors;
     this.generalErrors = generalErrors;
   }
@@ -69,6 +78,8 @@ export function extractValidationErrors(data: unknown): {
     if (lower.includes('vendor')) fieldErrors['vendor_names'] = detail;
     if (lower.includes('title')) fieldErrors['title'] = detail;
     if (lower.includes('category')) fieldErrors['category'] = detail;
+    if (lower.includes('code')) fieldErrors['code'] = detail;
+    if (lower.includes('text')) fieldErrors['text'] = detail;
   } else if (Array.isArray(detail)) {
     for (const item of detail) {
       if (typeof item === 'string') {
@@ -138,7 +149,7 @@ class ApiClient {
             ? errorObj.detail
             : JSON.stringify(errorObj.detail))
         : `${response.status} ${response.statusText}`;
-      throw new Error(detailMsg);
+      throw new ApiHttpError(detailMsg, response.status);
     }
 
     return response.json();
@@ -312,6 +323,51 @@ class ApiClient {
       }
     );
     return this.handleResponse<RequirementItem[]>(response);
+  }
+
+  async replaceRequirements(
+    evaluationId: string,
+    payload: RequirementItem[]
+  ): Promise<RequirementItem[]> {
+    const headers = await this.getAuthHeader();
+    const response = await fetch(
+      `${BASE_URL}/api/evaluations/${evaluationId}/requirements`,
+      {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          ...headers,
+        },
+        body: JSON.stringify(payload),
+      }
+    );
+    return this.handleResponse<RequirementItem[]>(response);
+  }
+
+  async extractRequirements(
+    evaluationId: string,
+    payload?: ExtractRequirementsRequest
+  ): Promise<AnalysisJobResponse> {
+    const headers = await this.getAuthHeader();
+    const response = await fetch(
+      `${BASE_URL}/api/evaluations/${evaluationId}/extract`,
+      payload !== undefined
+        ? {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              ...headers,
+            },
+            body: JSON.stringify(payload),
+          }
+        : {
+            method: 'POST',
+            headers: {
+              ...headers,
+            },
+          }
+    );
+    return this.handleResponse<AnalysisJobResponse>(response);
   }
 
   // --- Latest Job ---
