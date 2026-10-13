@@ -48,6 +48,15 @@ export const DocumentsPage: React.FC = () => {
 
   // Read once per mount so the load effect depends only on the evaluation id.
   const navStateRef = useRef(routerLocation.state as { fromExtractStart?: boolean } | null);
+  const isMountedRef = useRef<boolean>(true);
+  const navigatedJobIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   const [detail, setDetail] = useState<EvaluationDetailResponse | null>(null);
   const [latestJob, setLatestJob] = useState<AnalysisJobResponse | null>(null);
@@ -93,14 +102,27 @@ export const DocumentsPage: React.FC = () => {
     setPageError(null);
 
     Promise.all([apiClient.getEvaluation(evaluationId), apiClient.getLatestJob(evaluationId)])
-      .then(([fresh, job]) => {
-        if (!active) return;
+      .then(async ([fresh, job]) => {
+        if (!active || !isMountedRef.current) return;
         setDetail(fresh);
         const effectiveJob = job ?? fresh.latest_job ?? null;
         setLatestJob(effectiveJob);
-        // Arrived right after starting an extraction that already finished
-        if (navStateRef.current?.fromExtractStart && effectiveJob?.status === 'done') {
-          navigate(`/evaluations/${evaluationId}/requirements`, { replace: true });
+
+        if (effectiveJob?.status === 'done') {
+          // If explicitly redirected after starting extraction from Requirements review
+          if (
+            navStateRef.current?.fromExtractStart &&
+            navigatedJobIdRef.current !== effectiveJob.id
+          ) {
+            navigatedJobIdRef.current = effectiveJob.id;
+            await refreshLayout?.();
+            if (active && isMountedRef.current) {
+              navigate(`/evaluations/${evaluationId}/requirements`, { replace: true });
+            }
+          } else {
+            // Already finished before this visit, or revisit: record so we never auto-navigate
+            navigatedJobIdRef.current = effectiveJob.id;
+          }
         }
       })
       .catch((err: unknown) => {
@@ -114,14 +136,13 @@ export const DocumentsPage: React.FC = () => {
     return () => {
       active = false;
     };
-  }, [evaluationId, navigate]);
+  }, [evaluationId, navigate, refreshLayout]);
 
   const jobActive = isJobActive(latestJob);
 
   // Poll jobs/latest every 2 s while a job is active; stop on done/failed and on unmount
   useEffect(() => {
     if (!evaluationId || !jobActive) return;
-    let cancelled = false;
 
     const intervalId = window.setInterval(async () => {
       try {
@@ -129,16 +150,25 @@ export const DocumentsPage: React.FC = () => {
           apiClient.getLatestJob(evaluationId),
           apiClient.getEvaluation(evaluationId),
         ]);
-        if (cancelled) return;
-        setDetail(fresh);
-        setLatestJob(job);
+        if (!isMountedRef.current) return;
 
         if (!job || job.status === 'done' || job.status === 'failed') {
           window.clearInterval(intervalId);
-          await refreshLayout?.();
-          if (!cancelled && job?.status === 'done') {
-            navigate(`/evaluations/${evaluationId}/requirements`);
+          if (job?.status === 'done' && navigatedJobIdRef.current !== job.id) {
+            navigatedJobIdRef.current = job.id;
+            setLatestJob(job);
+            setDetail(fresh);
+            await refreshLayout?.();
+            if (isMountedRef.current) {
+              navigate(`/evaluations/${evaluationId}/requirements`);
+            }
+            return;
           }
+        }
+
+        if (isMountedRef.current) {
+          setDetail(fresh);
+          setLatestJob(job);
         }
       } catch {
         // Keep polling on transient errors
@@ -146,7 +176,6 @@ export const DocumentsPage: React.FC = () => {
     }, 2000);
 
     return () => {
-      cancelled = true;
       window.clearInterval(intervalId);
     };
   }, [evaluationId, jobActive, navigate, refreshLayout]);
@@ -360,8 +389,12 @@ export const DocumentsPage: React.FC = () => {
       setReplacedSlots({});
       await reloadDetail();
 
-      if (job.status === 'done') {
-        navigate(`/evaluations/${evaluationId}/requirements`);
+      if (job.status === 'done' && navigatedJobIdRef.current !== job.id) {
+        navigatedJobIdRef.current = job.id;
+        await refreshLayout?.();
+        if (isMountedRef.current) {
+          navigate(`/evaluations/${evaluationId}/requirements`);
+        }
       }
     } catch (err: unknown) {
       if (err instanceof ApiValidationError) {

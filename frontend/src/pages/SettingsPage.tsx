@@ -20,6 +20,7 @@ import { useUnsavedChangesGuard } from '@/components/UnsavedChangesGuard';
 import type {
   EvaluationCriterionUpdateItem,
 } from '@/lib/types';
+import { getCriteriaScoringHelp } from '@/lib/criteriaScoringHelp';
 
 const BUILTIN_DEFAULTS: EvaluationCriterionUpdateItem[] = [
   {
@@ -905,7 +906,7 @@ export const SettingsPage: React.FC = () => {
                 Evaluation criteria
               </h2>
               <p className="text-body text-muted">
-                Configure default weights and criteria for vendor evaluations.
+                Each vendor scores 0–100 per criterion. Points = score × weight ÷ 100. Total is out of 100.
               </p>
             </div>
             {!loading && (
@@ -952,14 +953,15 @@ export const SettingsPage: React.FC = () => {
                 <thead>
                   <tr className="border-b border-border bg-surface text-table-header text-muted">
                     <th className="py-3 px-4 w-[28%] font-medium">Criterion</th>
-                    <th className="py-3 px-4 w-[48%] font-medium">Guidance</th>
-                    <th className="py-3 px-4 w-[14%] font-medium text-right">Weight (%)</th>
-                    <th className="py-3 px-4 w-[10%] font-medium text-center">Actions</th>
+                    <th className="py-3 px-4 w-[42%] font-medium">Guidance</th>
+                    <th className="py-3 px-4 w-[22%] font-medium text-right">Weight (%)</th>
+                    <th className="py-3 px-4 w-[8%] font-medium text-center">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
                   {criteria.map((item, index) => {
                     const isBuiltin = item.kind === 'builtin';
+                    const scoringHelp = getCriteriaScoringHelp(item.builtin_key);
                     const nameError =
                       validationErrors[`${index}.name`] ||
                       serverErrors[`${index}.name`] ||
@@ -980,9 +982,14 @@ export const SettingsPage: React.FC = () => {
                       >
                         <td className="py-3.5 px-4">
                           {isBuiltin ? (
-                            <div className="flex items-center gap-2 font-medium text-text text-sm">
-                              <Lock className="w-3.5 h-3.5 text-muted shrink-0" />
-                              <span>{item.name}</span>
+                            <div className="space-y-1">
+                              <div className="flex items-center gap-2 font-medium text-text text-sm">
+                                <Lock className="w-3.5 h-3.5 text-muted shrink-0" />
+                                <span>{item.name}</span>
+                              </div>
+                              <p className="text-xs text-muted leading-relaxed" title="How it's scored" aria-label="How it's scored">
+                                {scoringHelp}
+                              </p>
                             </div>
                           ) : (
                             <div className="space-y-1">
@@ -1002,6 +1009,9 @@ export const SettingsPage: React.FC = () => {
                                   {nameError}
                                 </p>
                               )}
+                              <p className="text-xs text-muted leading-relaxed" title="How it's scored" aria-label="How it's scored">
+                                {scoringHelp}
+                              </p>
                             </div>
                           )}
                         </td>
@@ -1014,7 +1024,7 @@ export const SettingsPage: React.FC = () => {
                               <Textarea
                                 value={item.guidance}
                                 onChange={(e) => handleGuidanceChange(index, e.target.value)}
-                                placeholder="Describe guidance for evaluation (20–1000 characters)"
+                                placeholder="Fully meets when… Partly meets when… Not met when…"
                                 rows={2}
                                 maxLength={1000}
                                 className={
@@ -1047,18 +1057,23 @@ export const SettingsPage: React.FC = () => {
 
                         <td className="py-3.5 px-4 text-right">
                           <div className="flex flex-col items-end gap-1">
-                            <Input
-                              type="number"
-                              min={0}
-                              max={100}
-                              value={item.weight}
-                              onChange={(e) => handleWeightChange(index, e.target.value)}
-                              className={`w-20 text-right ${
-                                weightError
-                                  ? 'border-status-noncompliant-text focus-visible:ring-status-noncompliant-text'
-                                  : ''
-                              }`}
-                            />
+                            <div className="flex items-center justify-end gap-2.5">
+                              <span className="text-xs text-muted whitespace-nowrap">
+                                Up to {item.weight === '' ? 0 : item.weight} of 100 points
+                              </span>
+                              <Input
+                                type="number"
+                                min={0}
+                                max={100}
+                                value={item.weight}
+                                onChange={(e) => handleWeightChange(index, e.target.value)}
+                                className={`w-16 text-right ${
+                                  weightError
+                                    ? 'border-status-noncompliant-text focus-visible:ring-status-noncompliant-text'
+                                    : ''
+                                }`}
+                              />
+                            </div>
                             {weightError && (
                               <p className="text-xs text-status-noncompliant-text text-right">
                                 {weightError}
