@@ -139,6 +139,42 @@ class RequirementItem(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
+    @field_validator("code")
+    @classmethod
+    def validate_code(cls, v: str) -> str:
+        stripped = v.strip()
+        if not stripped:
+            raise ValueError("Requirement code cannot be empty")
+        if len(stripped) > 20:
+            raise ValueError("Requirement code cannot exceed 20 characters")
+        return stripped
+
+    @field_validator("text")
+    @classmethod
+    def validate_text(cls, v: str) -> str:
+        stripped = v.strip()
+        if not stripped:
+            raise ValueError("Requirement text cannot be empty")
+        if len(stripped) > 1000:
+            raise ValueError("Requirement text cannot exceed 1000 characters")
+        return stripped
+
+    @field_validator("category")
+    @classmethod
+    def validate_category(cls, v: str) -> str:
+        stripped = v.strip()
+        if len(stripped) > 80:
+            raise ValueError("Requirement category cannot exceed 80 characters")
+        return stripped
+
+    @field_validator("acceptance")
+    @classmethod
+    def validate_acceptance(cls, v: str) -> str:
+        stripped = v.strip()
+        if len(stripped) > 1000:
+            raise ValueError("Requirement acceptance cannot exceed 1000 characters")
+        return stripped
+
 
 class AnalysisJobResponse(BaseModel):
     id: uuid.UUID

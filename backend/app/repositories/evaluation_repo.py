@@ -2,6 +2,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Any, Dict, List, Optional, Tuple
 import uuid
+from fastapi import HTTPException, status
 from sqlalchemy import delete, desc, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -231,6 +232,17 @@ class EvaluationRepository:
         eval_obj = await EvaluationRepository.get_by_id(session, user_id, evaluation_id)
         if not eval_obj:
             return None
+
+        # Validate unique codes (case-insensitive) before any DB writes
+        codes_seen = set()
+        for item in items:
+            low_code = item.code.strip().lower()
+            if low_code in codes_seen:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail=f"Duplicate requirement code: '{item.code}'",
+                )
+            codes_seen.add(low_code)
 
         # Atomically delete existing requirements
         await session.execute(

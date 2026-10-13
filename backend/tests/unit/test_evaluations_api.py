@@ -182,3 +182,127 @@ def test_delete_cascades_rows_and_files():
 
         # Check DB rows removed
         assert client.get(f"/api/evaluations/{eval_id}", headers=auth).status_code == 404
+
+
+def test_requirements_put_validation_and_atomicity():
+    uid = f"uid-req-val-{uuid.uuid4().hex}"
+    with patch("firebase_admin.auth.verify_id_token", return_value=fake_token(uid)):
+        auth = {"Authorization": "Bearer token"}
+
+        create_resp = client.post(
+            "/api/evaluations",
+            headers=auth,
+            json={"title": "Validation RFP", "category": "Facilities", "vendor_names": ["Vendor A", "Vendor B"]},
+        )
+        assert create_resp.status_code == 201
+        eval_id = create_resp.json()["id"]
+
+        # 1. Valid list saves and trims fields
+        valid_initial = [
+            {
+                "code": "  REQ-01  ",
+                "text": "  Trained guards on duty 24x7.  ",
+                "category": "  Security coverage  ",
+                "mandatory": True,
+                "acceptance": "  Duty roster attached.  ",
+                "position": 0,
+                "origin": "user",
+            },
+            {
+                "code": "REQ-02",
+                "text": "One supervisor on site per shift.",
+                "category": "Supervision",
+                "mandatory": False,
+                "acceptance": "Supervisor named.",
+                "position": 1,
+                "origin": "extracted",
+            },
+        ]
+        save_resp = client.put(f"/api/evaluations/{eval_id}/requirements", headers=auth, json=valid_initial)
+        assert save_resp.status_code == 200
+        saved_items = save_resp.json()
+        assert len(saved_items) == 2
+        assert saved_items[0]["code"] == "REQ-01"
+        assert saved_items[0]["text"] == "Trained guards on duty 24x7."
+        assert saved_items[0]["category"] == "Security coverage"
+        assert saved_items[0]["acceptance"] == "Duty roster attached."
+
+        # 2. Empty code -> 422
+        empty_code_payload = [
+            {
+                "code": "   ",
+                "text": "Valid text",
+                "category": "Ops",
+                "mandatory": True,
+                "acceptance": "Check",
+                "position": 0,
+                "origin": "user",
+            }
+        ]
+        r_empty_code = client.put(f"/api/evaluations/{eval_id}/requirements", headers=auth, json=empty_code_payload)
+        assert r_empty_code.status_code == 422
+
+        # 3. Whitespace-only text -> 422
+        ws_text_payload = [
+            {
+                "code": "REQ-01",
+                "text": "   \t\n  ",
+                "category": "Ops",
+                "mandatory": True,
+                "acceptance": "Check",
+                "position": 0,
+                "origin": "user",
+            }
+        ]
+        r_ws_text = client.put(f"/api/evaluations/{eval_id}/requirements", headers=auth, json=ws_text_payload)
+        assert r_ws_text.status_code == 422
+
+        # 4. Length violations (code > 20, text > 1000, category > 80, acceptance > 1000) -> 422
+        for bad_field, bad_val in [
+            ("code", "R" * 21),
+            ("text", "T" * 1001),
+            ("category", "C" * 81),
+            ("acceptance", "A" * 1001),
+        ]:
+            item = {
+                "code": "REQ-01",
+                "text": "Valid text",
+                "category": "Ops",
+                "mandatory": True,
+                "acceptance": "Check",
+                "position": 0,
+                "origin": "user",
+            }
+            item[bad_field] = bad_val
+            r_len = client.put(f"/api/evaluations/{eval_id}/requirements", headers=auth, json=[item])
+            assert r_len.status_code == 422
+
+        # 5. Duplicate codes differing only by case -> 422
+        dup_code_payload = [
+            {
+                "code": "REQ-01",
+                "text": "First requirement",
+                "category": "Ops",
+                "mandatory": True,
+                "acceptance": "Check 1",
+                "position": 0,
+                "origin": "user",
+            },
+            {
+                "code": "req-01",
+                "text": "Second requirement with lowercase code",
+                "category": "Ops",
+                "mandatory": False,
+                "acceptance": "Check 2",
+                "position": 1,
+                "origin": "user",
+            },
+        ]
+        r_dup = client.put(f"/api/evaluations/{eval_id}/requirements", headers=auth, json=dup_code_payload)
+        assert r_dup.status_code == 422
+        assert "Duplicate requirement code" in r_dup.json()["detail"]
+
+        # 6. Failed PUT leaves list unchanged (no partial writes)
+        refetched = client.get(f"/api/evaluations/{eval_id}/requirements", headers=auth).json()
+        assert refetched == saved_items
+

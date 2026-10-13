@@ -416,6 +416,33 @@ async def seed_demo_data(session: Optional[AsyncSession] = None) -> None:
         await session.flush()
         session.add(Vendor(id=uuid.uuid4(), evaluation_id=eval_2.id, name="SecureShield Guards", position=0))
         session.add(Vendor(id=uuid.uuid4(), evaluation_id=eval_2.id, name="Apex Patrol Services", position=1))
+
+        eval_2_req_defs = [
+            ("REQ-01", "Security coverage", True, "Trained guards on duty 24×7 at all three campus gates.", "Duty roster shows continuous cover at each gate.", 0),
+            ("REQ-02", "Compliance", True, "Agency holds a valid private security agency licence for Maharashtra.", "Copy of current licence attached.", 1),
+            ("REQ-03", "Supervision", True, "One security supervisor on site for every shift.", "Supervisor named in the shift roster.", 2),
+            ("REQ-04", "Operations", True, "Visitor log maintained at reception for every entry and exit.", "Register or digital log described.", 3),
+            ("REQ-05", "Training", False, "Guards complete fire-safety training within 30 days of deployment.", "Training plan with timeline.", 4),
+            ("REQ-06", "Reporting", False, "Monthly incident report shared with the facilities manager.", "Report format and schedule stated.", 5),
+        ]
+        for code, cat, mand, text, acc, pos in eval_2_req_defs:
+            session.add(
+                Requirement(
+                    id=uuid.uuid5(uuid.NAMESPACE_DNS, f"vixenone.eval2.req.{code}"),
+                    evaluation_id=eval_2.id,
+                    code=code,
+                    text=text,
+                    category=cat,
+                    mandatory=mand,
+                    acceptance=acc,
+                    source_document_id=None,
+                    source_page=None,
+                    source_section=None,
+                    position=pos,
+                    origin="extracted",
+                )
+            )
+
         session.add(AnalysisJob(
             id=uuid.uuid4(),
             evaluation_id=eval_2.id,
@@ -440,6 +467,32 @@ async def seed_demo_data(session: Optional[AsyncSession] = None) -> None:
         await session.flush()
         session.add(Vendor(id=uuid.uuid4(), evaluation_id=eval_3.id, name="FreshBite Caterers", position=0))
         session.add(Vendor(id=uuid.uuid4(), evaluation_id=eval_3.id, name="Gourmet Pantry Co", position=1))
+
+        eval_3_req_defs = [
+            ("REQ-01", "Compliance", True, "Caterer holds a valid FSSAI licence.", "Copy of current licence attached.", 0),
+            ("REQ-02", "Service coverage", True, "Breakfast and lunch served Monday to Friday for up to 150 staff.", "Meal schedule and capacity stated.", 1),
+            ("REQ-03", "Hygiene", True, "Daily kitchen hygiene checklist signed by the supervisor.", "Checklist format described.", 2),
+            ("REQ-04", "Operations", False, "Weekly menu shared every Friday.", "Menu process stated.", 3),
+            ("REQ-05", "Service coverage", False, "Pantry tea and coffee stations refilled twice daily.", "Refill schedule stated.", 4),
+        ]
+        for code, cat, mand, text, acc, pos in eval_3_req_defs:
+            session.add(
+                Requirement(
+                    id=uuid.uuid5(uuid.NAMESPACE_DNS, f"vixenone.eval3.req.{code}"),
+                    evaluation_id=eval_3.id,
+                    code=code,
+                    text=text,
+                    category=cat,
+                    mandatory=mand,
+                    acceptance=acc,
+                    source_document_id=None,
+                    source_page=None,
+                    source_section=None,
+                    position=pos,
+                    origin="extracted",
+                )
+            )
+
         session.add(AnalysisJob(
             id=uuid.uuid4(),
             evaluation_id=eval_3.id,

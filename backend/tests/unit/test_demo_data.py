@@ -146,3 +146,57 @@ def test_changing_snapshot_weights_changes_totals_without_touching_stored_rows()
             assert bn_vendor["score"] == 73
         finally:
             asyncio.run(update_snapshot(restore=True))
+
+
+def test_demo_seed_idempotent_security_and_pantry_requirements():
+    async def run_seed_again():
+        async with async_session() as s:
+            await seed_demo_data(s)
+
+    # Seed was already run once in fixture; run a second time to verify idempotency
+    asyncio.run(run_seed_again())
+
+    with patch("firebase_admin.auth.verify_id_token", return_value=demo_token()):
+        auth = {"Authorization": "Bearer demo"}
+        evals_resp = client.get("/api/evaluations", headers=auth).json()
+        evals = {e["title"]: e for e in evals_resp["evaluations"]}
+
+        sec_summary = evals["Security Services — Powai Campus"]
+        pantry_summary = evals["Pantry & Cafeteria — BKC Office"]
+
+        assert sec_summary["status"] == "requirements_review"
+        assert sec_summary["total_requirements"] == 6
+        assert sec_summary["mandatory_requirements"] == 4
+
+        assert pantry_summary["status"] == "stale"
+        assert pantry_summary["total_requirements"] == 5
+        assert pantry_summary["mandatory_requirements"] == 3
+
+        sec_reqs = client.get(f"/api/evaluations/{sec_summary['id']}/requirements", headers=auth).json()
+        assert len(sec_reqs) == 6
+        assert sum(1 for r in sec_reqs if r["mandatory"]) == 4
+        assert [r["code"] for r in sec_reqs] == ["REQ-01", "REQ-02", "REQ-03", "REQ-04", "REQ-05", "REQ-06"]
+        assert [r["position"] for r in sec_reqs] == [0, 1, 2, 3, 4, 5]
+        for r in sec_reqs:
+            assert r["origin"] == "extracted"
+            assert r["source_document_id"] is None
+            assert r["source_page"] is None
+            assert r["source_section"] is None
+
+        pantry_reqs = client.get(f"/api/evaluations/{pantry_summary['id']}/requirements", headers=auth).json()
+        assert len(pantry_reqs) == 5
+        assert sum(1 for r in pantry_reqs if r["mandatory"]) == 3
+        assert [r["code"] for r in pantry_reqs] == ["REQ-01", "REQ-02", "REQ-03", "REQ-04", "REQ-05"]
+        assert [r["position"] for r in pantry_reqs] == [0, 1, 2, 3, 4]
+        for r in pantry_reqs:
+            assert r["origin"] == "extracted"
+            assert r["source_document_id"] is None
+            assert r["source_page"] is None
+            assert r["source_section"] is None
+
+        # Ensure no fake documents were created on either evaluation
+        sec_detail = client.get(f"/api/evaluations/{sec_summary['id']}", headers=auth).json()
+        pantry_detail = client.get(f"/api/evaluations/{pantry_summary['id']}", headers=auth).json()
+        assert sec_detail["documents"] == []
+        assert pantry_detail["documents"] == []
+
