@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { NavLink, Outlet, useParams, Link } from 'react-router-dom';
 import { apiClient } from '@/lib/api/client';
 import { cn } from '@/lib/utils';
@@ -6,16 +6,17 @@ import type { EvaluationDetailResponse } from '@/lib/types';
 
 export interface EvaluationLayoutContext {
   evaluationDetail: EvaluationDetailResponse | null;
-  setEvaluationDetail: React.Dispatch<React.SetStateAction<EvaluationDetailResponse | null>>;
-  updateHeaderCounts: (total: number, mandatory: number) => void;
+  savedRequirementCount: number;
+  savedMandatoryCount: number;
+  refresh: () => Promise<void>;
 }
 
 export const EvaluationLayout: React.FC = () => {
   const { id } = useParams<{ id: string }>();
 
-  const [evaluationDetail, setEvaluationDetail] = useState<EvaluationDetailResponse | null>(null);
-  const [totalRequirements, setTotalRequirements] = useState<number>(0);
-  const [mandatoryRequirements, setMandatoryRequirements] = useState<number>(0);
+  const [evaluationDetail, setDetail] = useState<EvaluationDetailResponse | null>(null);
+  const [savedRequirementCount, setSavedRequirementCount] = useState<number>(0);
+  const [savedMandatoryCount, setSavedMandatoryCount] = useState<number>(0);
 
   useEffect(() => {
     let active = true;
@@ -26,9 +27,9 @@ export const EvaluationLayout: React.FC = () => {
       ])
         .then(([detail, reqs]) => {
           if (!active) return;
-          setEvaluationDetail(detail);
-          setTotalRequirements(reqs.length);
-          setMandatoryRequirements(reqs.filter((r) => r.mandatory).length);
+          setDetail(detail);
+          setSavedRequirementCount(reqs.length);
+          setSavedMandatoryCount(reqs.filter((r) => r.mandatory).length);
         })
         .catch(() => {});
     }
@@ -37,10 +38,30 @@ export const EvaluationLayout: React.FC = () => {
     };
   }, [id]);
 
-  const updateHeaderCounts = useCallback((total: number, mandatory: number) => {
-    setTotalRequirements(total);
-    setMandatoryRequirements(mandatory);
-  }, []);
+  const refresh = useCallback(async () => {
+    if (!id) return;
+    try {
+      const [detail, reqs] = await Promise.all([
+        apiClient.getEvaluation(id),
+        apiClient.getRequirements(id).catch(() => []),
+      ]);
+      setDetail(detail);
+      setSavedRequirementCount(reqs.length);
+      setSavedMandatoryCount(reqs.filter((r) => r.mandatory).length);
+    } catch {
+      // Preserve current header state on error
+    }
+  }, [id]);
+
+  const outletContext = useMemo<EvaluationLayoutContext>(
+    () => ({
+      evaluationDetail,
+      savedRequirementCount,
+      savedMandatoryCount,
+      refresh,
+    }),
+    [evaluationDetail, savedRequirementCount, savedMandatoryCount, refresh]
+  );
 
   const title = evaluationDetail?.title || '';
   const shortTitle = title.includes('—') ? title.split('—')[0].trim() : title;
@@ -73,8 +94,8 @@ export const EvaluationLayout: React.FC = () => {
 
         <p className="text-body text-muted">
           Mumbai · {category ? `${category} · ` : ''}
-          {totalRequirements} requirement{totalRequirements === 1 ? '' : 's'} (
-          {mandatoryRequirements} mandatory)
+          {savedRequirementCount} requirement{savedRequirementCount === 1 ? '' : 's'} (
+          {savedMandatoryCount} mandatory)
         </p>
       </div>
 
@@ -100,15 +121,7 @@ export const EvaluationLayout: React.FC = () => {
 
       {/* Tab Content */}
       <div className="pt-2">
-        <Outlet
-          context={
-            {
-              evaluationDetail,
-              setEvaluationDetail,
-              updateHeaderCounts,
-            } satisfies EvaluationLayoutContext
-          }
-        />
+        <Outlet context={outletContext} />
       </div>
     </div>
   );

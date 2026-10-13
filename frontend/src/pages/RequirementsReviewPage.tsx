@@ -31,7 +31,6 @@ import {
 } from '@/components/ui/tooltip';
 import type { EvaluationLayoutContext } from '@/components/layout/EvaluationLayout';
 import type {
-  EvaluationDetailResponse,
   RequirementItem,
   RequirementOrigin,
 } from '@/lib/types';
@@ -168,16 +167,15 @@ export const RequirementsReviewPage: React.FC = () => {
   const { id: evaluationId } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const outletContext = useOutletContext<EvaluationLayoutContext | undefined>();
+  const evaluation = outletContext?.evaluationDetail ?? null;
 
-  const [evaluation, setEvaluation] = useState<EvaluationDetailResponse | null>(
-    outletContext?.evaluationDetail ?? null
-  );
   const [initialItems, setInitialItems] = useState<RequirementItem[]>([]);
   const [rows, setRows] = useState<EditableRequirementRow[]>([]);
   const [editingRowIds, setEditingRowIds] = useState<Set<string>>(new Set());
   const [rowBackups, setRowBackups] = useState<Record<string, EditableRequirementRow>>({});
 
   const [loading, setLoading] = useState<boolean>(true);
+  const [hasLoaded, setHasLoaded] = useState<boolean>(false);
   const [saving, setSaving] = useState<boolean>(false);
   const [rerunning, setRerunning] = useState<boolean>(false);
   const [errorBanner, setErrorBanner] = useState<string | null>(null);
@@ -188,46 +186,40 @@ export const RequirementsReviewPage: React.FC = () => {
   const bypassBlockerRef = useRef<boolean>(false);
   const nextLocalIdCounter = useRef<number>(1);
 
-  const syncFromServerData = useCallback(
-    (detail: EvaluationDetailResponse, reqs: RequirementItem[]) => {
-      setEvaluation(detail);
-      outletContext?.setEvaluationDetail?.(detail);
-      setInitialItems(reqs);
-      const mapped = reqs.map((item, idx) => mapItemToEditableRow(item, idx));
-      setRows(mapped);
-      setEditingRowIds(new Set());
-      setRowBackups({});
-      setServerErrors({});
-      outletContext?.updateHeaderCounts?.(
-        reqs.length,
-        reqs.filter((r) => r.mandatory).length
-      );
-    },
-    [outletContext]
-  );
-
-  const loadData = useCallback(async () => {
-    if (!evaluationId) return;
-    try {
-      setLoading(true);
-      setErrorBanner(null);
-      const [detail, reqs] = await Promise.all([
-        apiClient.getEvaluation(evaluationId),
-        apiClient.getRequirements(evaluationId),
-      ]);
-      syncFromServerData(detail, reqs);
-    } catch (err: unknown) {
-      setErrorBanner(
-        err instanceof Error ? err.message : 'Failed to load requirements'
-      );
-    } finally {
-      setLoading(false);
-    }
-  }, [evaluationId, syncFromServerData]);
-
   useEffect(() => {
-    loadData();
-  }, [loadData]);
+    let active = true;
+    if (!evaluationId) return;
+
+    setLoading(true);
+    setErrorBanner(null);
+
+    apiClient
+      .getRequirements(evaluationId)
+      .then((reqs) => {
+        if (!active) return;
+        setInitialItems(reqs);
+        setRows(reqs.map((item, idx) => mapItemToEditableRow(item, idx)));
+        setEditingRowIds(new Set());
+        setRowBackups({});
+        setServerErrors({});
+        setHasLoaded(true);
+      })
+      .catch((err: unknown) => {
+        if (!active) return;
+        setErrorBanner(
+          err instanceof Error ? err.message : 'Failed to load requirements'
+        );
+      })
+      .finally(() => {
+        if (active) {
+          setLoading(false);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [evaluationId]);
 
   // Map initial items by localId
   const initialByLocalId = useMemo(() => {
@@ -239,21 +231,15 @@ export const RequirementsReviewPage: React.FC = () => {
     return map;
   }, [initialItems]);
 
-  // Keep layout header counts in sync with current rows
+  // Live mandatory count for the page's own count line (includes unsaved edits)
   const mandatoryCount = useMemo(
     () => rows.filter((r) => r.mandatory).length,
     [rows]
   );
 
-  useEffect(() => {
-    if (!loading) {
-      outletContext?.updateHeaderCounts?.(rows.length, mandatoryCount);
-    }
-  }, [rows.length, mandatoryCount, loading, outletContext]);
-
   // Check if local rows differ from initialItems
   const isDirty = useMemo(() => {
-    if (loading) return false;
+    if (loading && !hasLoaded) return false;
     if (rows.length !== initialItems.length) return true;
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i];
@@ -263,7 +249,7 @@ export const RequirementsReviewPage: React.FC = () => {
       if (!isRowUnchanged(row, initial)) return true;
     }
     return false;
-  }, [rows, initialItems, initialByLocalId, loading]);
+  }, [rows, initialItems, initialByLocalId, loading, hasLoaded]);
 
   // Browser unload warning when dirty
   useEffect(() => {
@@ -488,12 +474,14 @@ export const RequirementsReviewPage: React.FC = () => {
 
       await apiClient.replaceRequirements(evaluationId, payload);
 
-      // Refetch requirements and evaluation detail on success, clear dirty state
-      const [detail, refetchedReqs] = await Promise.all([
-        apiClient.getEvaluation(evaluationId),
-        apiClient.getRequirements(evaluationId),
-      ]);
-      syncFromServerData(detail, refetchedReqs);
+      // Refetch requirements on success, clear dirty state, and refresh layout header counts + detail
+      const refetchedReqs = await apiClient.getRequirements(evaluationId);
+      setInitialItems(refetchedReqs);
+      setRows(refetchedReqs.map((item, idx) => mapItemToEditableRow(item, idx)));
+      setEditingRowIds(new Set());
+      setRowBackups({});
+      setServerErrors({});
+      await outletContext?.refresh();
       setSuccessBanner('Requirements saved successfully.');
     } catch (err: unknown) {
       if (err instanceof ApiValidationError) {
@@ -522,6 +510,8 @@ export const RequirementsReviewPage: React.FC = () => {
       } else {
         await apiClient.extractRequirements(evaluationId);
       }
+
+      await outletContext?.refresh();
 
       bypassBlockerRef.current = true;
       navigate(`/evaluations/${evaluationId}/upload`, {
@@ -566,7 +556,7 @@ export const RequirementsReviewPage: React.FC = () => {
     await executeRerunExtraction(true);
   };
 
-  if (loading) {
+  if (loading && !hasLoaded && rows.length === 0) {
     return (
       <div className="rounded-lg border border-border bg-background p-12 text-center text-muted text-sm">
         Loading requirements...
