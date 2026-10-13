@@ -98,7 +98,7 @@ async def seed_demo_data(session: Optional[AsyncSession] = None) -> None:
                 loc_obj.city = loc_city
                 loc_obj.position = pos
                 loc_obj.updated_at = func.now()
-            elif loc_obj is None:
+            else:
                 loc_obj = Location(
                     id=loc_id,
                     company_id=company.id,
@@ -107,11 +107,6 @@ async def seed_demo_data(session: Optional[AsyncSession] = None) -> None:
                     position=pos,
                 )
                 session.add(loc_obj)
-            else:
-                loc_obj.name = loc_name
-                loc_obj.city = loc_city
-                loc_obj.position = pos
-                loc_obj.updated_at = func.now()
             loc_by_name[loc_name] = loc_obj
         await session.commit()
 

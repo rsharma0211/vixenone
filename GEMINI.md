@@ -46,7 +46,7 @@ Breaking any of these is a failed task, even if tests pass.
 7. **Failures are visible.** Extraction or analysis failures are surfaced to the user. Nothing fails silently.
 8. **Google products only** for runtime and cloud services. Open-source libraries are fine.
    Never add a non-Google cloud service or API.
-9. **Data layer integrity.** PostgreSQL 16, async SQLAlchemy 2 with psycopg 3. All schema changes via
+9. **Data layer integrity.** PostgreSQL 18, async SQLAlchemy 2 with psycopg 3. All schema changes via
    Alembic migrations only. Repositories use SQLAlchemy sessions.
 10. **Storage isolation.** Files are accessed only through the storage service interface (`StorageService`).
     Never touch the filesystem directly from routes.
@@ -70,11 +70,11 @@ Breaking any of these is a failed task, even if tests pass.
 | Document parsing | PyMuPDF (PDF), python-docx (DOCX) |
 | AI | Gemini via official Google GenAI SDK (`google-genai`), Developer API key from environment (`GEMINI_API_KEY`), model from environment (`GEMINI_MODEL`) |
 | Auth | Firebase Authentication (emulator locally, real Firebase in deploy via ADC, switched purely by environment; no service account keys) |
-| Data | PostgreSQL 16, async SQLAlchemy 2 with psycopg 3, Alembic migrations only |
+| Data | PostgreSQL 18, async SQLAlchemy 2 with psycopg 3, Alembic migrations only |
 | Storage | Swappable `StorageService` interface (`LocalStorageService` locally; cloud storage adapter in deploy) |
 | Background jobs | Background jobs with execution state and status persisted in PostgreSQL; UI polls |
 | Local stack | Docker Compose: `web`, `api`, `postgres`, `firebase-auth-emulator` only |
-| Cloud | Cloud Run (2 services), Cloud SQL (PostgreSQL 16), Artifact Registry, Secret Manager, Cloud Build |
+| Cloud | Cloud Run (2 services), Cloud SQL (PostgreSQL 18), Artifact Registry, Secret Manager, Cloud Build |
 | Tests | pytest (backend), recorded Gemini fixtures |
 
 Do not add dependencies without recording the reason in `docs/context/decisions.md`.
@@ -198,7 +198,7 @@ Every task ends with `make test` passing. Tasks touching schemas also run `make 
 ### Backend
 - Routers are thin: validate input, call a service, return a schema. No business logic in routers.
 - Every route depends on the auth dependency. Only `/api/health` and `/health` are public.
-- Data layer: PostgreSQL 16, async SQLAlchemy 2 with psycopg 3. All schema changes via Alembic migrations only. Repositories use SQLAlchemy sessions.
+- Data layer: PostgreSQL 18, async SQLAlchemy 2 with psycopg 3. All schema changes via Alembic migrations only. Repositories use SQLAlchemy sessions.
 - Data isolation: every query filters by the authenticated Firebase uid. No route returns another user's data.
 - Files: only accessed through the storage service interface (`StorageService`). Never touch the filesystem directly from routes.
 - Auth: Firebase Auth only. Emulator locally, real Firebase in deploy, switched purely by environment. No service account key files ever.

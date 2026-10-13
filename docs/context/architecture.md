@@ -14,7 +14,7 @@ The local development stack consists of four Docker containers on a shared bridg
            v                   v                   v                    v
 +-------------------+  +-------------------+  +---------------+  +------------------------+
 |        web        |  |        api        |  |   postgres    |  | firebase-auth-emulator |
-|  Node 20 / Vite   |  |  Python 3.12 /    |  | PostgreSQL 16 |  |  firebase-tools       |
+|  Node 20 / Vite   |  |  Python 3.12 /    |  | PostgreSQL 18 |  |  firebase-tools       |
 |  React + TS       |  |  FastAPI / Uvicorn|  |               |  |  (Auth only)           |
 +-------------------+  +-------------------+  +---------------+  +------------------------+
            |                   |                      ^                    ^
@@ -27,9 +27,9 @@ The local development stack consists of four Docker containers on a shared bridg
 ```
 
 1. **`postgres` (`vixenone-postgres`)**:
-   - PostgreSQL 16 Alpine.
+   - PostgreSQL 18 Alpine.
    - Listens on `5432`.
-   - Data stored in named Docker volume `postgres_data`.
+   - Data stored in named Docker volume `postgres_18_data` (mounted at `/var/lib/postgresql/18/docker`).
    - Healthcheck: `pg_isready -U vixenone -d vixenone`.
 
 2. **`firebase-auth-emulator` (`vixenone-firebase-auth`)**:

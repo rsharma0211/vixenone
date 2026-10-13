@@ -75,16 +75,19 @@ async def run_seed(
         demo_users = list(res_email.scalars().all())
 
         if demo_users:
-            user = demo_users[0]
+            matching_user = next((u for u in demo_users if u.firebase_uid == user_record.uid), None)
+            user = matching_user or demo_users[0]
+            other_users = [u for u in demo_users if u.id != user.id]
+            extra_company_ids = [
+                u.company_id for u in other_users if u.company_id and u.company_id != user.company_id
+            ]
+            for extra in other_users:
+                await session.delete(extra)
+            await session.flush()
+
             user.firebase_uid = user_record.uid
             user.display_name = DEMO_DISPLAY_NAME
             user.role = UserRole.FACILITIES_MANAGER
-            extra_company_ids = [
-                u.company_id for u in demo_users[1:] if u.company_id and u.company_id != user.company_id
-            ]
-            for extra in demo_users[1:]:
-                await session.delete(extra)
-            await session.flush()
             if extra_company_ids:
                 await session.execute(delete(Company).where(Company.id.in_(extra_company_ids)))
             await session.commit()

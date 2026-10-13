@@ -2,7 +2,7 @@ name: vixenone
 
 services:
   postgres:
-    image: postgres:16-alpine
+    image: postgres:18-alpine
     container_name: vixenone-postgres
     ports:
       - "${POSTGRES_PORT:-5432}:5432"
@@ -11,7 +11,7 @@ services:
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-vixenone}
       - POSTGRES_DB=${POSTGRES_DB:-vixenone}
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - postgres_18_data:/var/lib/postgresql/18/docker
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-vixenone} -d ${POSTGRES_DB:-vixenone}"]
       interval: 3s
@@ -104,7 +104,7 @@ services:
       - vixenone-net
 
 volumes:
-  postgres_data:
+  postgres_18_data:
 
 networks:
   vixenone-net:

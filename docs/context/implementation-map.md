@@ -6,7 +6,7 @@ Statuses: `done` · `partial` · `stub`
 | Component | Responsibility | Location | Status | Known Gaps |
 | --- | --- | --- | --- | --- |
 | Local Stack Orchestration | Docker Compose configuration for web, api, postgres, and firebase-auth | `docker-compose.yml`, `Makefile` | `done` | None |
-| Database Service | PostgreSQL 16 Alpine with named volume persistence & healthcheck | `docker-compose.yml` (`postgres`) | `done` | None |
+| Database Service | PostgreSQL 18 Alpine with named volume persistence & healthcheck | `docker-compose.yml` (`postgres`) | `done` | None |
 | Database Layer & Migrations | SQLAlchemy 2 async engine, psycopg 3, Alembic migrations (`0001`–`0005` including company/locations backfill) | `backend/app/core/database.py`, `backend/alembic/` | `done` | None |
 | Auth Dependency & Identity | Environment-driven Firebase Admin SDK init, ID-token verification, `get_current_user` dependency | `backend/app/core/auth.py` | `done` | None |
 | Storage Service | Swappable file storage interface (`StorageService`) with `LocalStorageService` (writing to `./uploads`) and `CloudStorageService` (Google Cloud Storage via ADC, off-event-loop calls via `asyncio.to_thread`) selected via `STORAGE_BACKEND` | `backend/app/services/storage.py` | `done` | None |

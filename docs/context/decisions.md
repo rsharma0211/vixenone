@@ -6,7 +6,7 @@ Append-only record of architectural and implementation decisions. Format: `YYYY-
 - 2026-10-12 — Enable Vite polling file-watch mode in Docker dev server — Ensure reliable hot module reloading across host volume mounts.
 - 2026-10-12 — Firebase emulator export-on-exit with SIGTERM trap — Ensure auth state persists seamlessly across `docker compose down` and `up`.
 - 2026-10-12 — Standalone Python urllib seed script — Eliminate dependency on heavy Firebase Admin SDK for local user provisioning.
-- 2026-10-12 — Use PostgreSQL 16 for application data instead of Firestore (Firestore removed) — Relational data model and ACID transactions for evaluations, matrix compliance, and scoring.
+- 2026-10-12 — Use PostgreSQL 18 for application data instead of Firestore (Firestore removed) — Relational data model and ACID transactions for evaluations, matrix compliance, and scoring.
 - 2026-10-12 — Use Firebase Auth Emulator exclusively for identity — Retain Firebase token-based auth while decoupling database and storage from Google proprietary cloud databases.
 - 2026-10-12 — Swappable StorageService interface with LocalStorageService — Local disk writes for local development with pluggable cloud adapter interface for later.
 - 2026-10-12 — Environment-driven Firebase Admin initialization — Switch between emulator and ADC modes based purely on environment without service account keys, and fail fast in production if emulator is configured.
@@ -68,4 +68,5 @@ Append-only record of architectural and implementation decisions. Format: `YYYY-
 - 2026-10-13 — Cloud tools login fix with --no-launch-browser and pinned Node LTS 24.21.0 / Firebase CLI 15.33.0 — Replaced gcloud --no-browser flag with --no-launch-browser in Makefile cloud-login because no-browser requires gcloud on a second machine; updated Node LTS to 24.21.0 and Firebase CLI to 15.33.0 in tools container image.
 - 2026-10-13 — Production build guard and same-origin API client in web container — Web production builds enforce empty API base URL so all calls hit same-origin /api, validate at build time that Firebase API key, auth domain, and project ID are set while rejecting emulator host with clear failure messages, and restrict fake API key fallback to local emulator dev.
 - 2026-10-13 — Third-party library preservation and removal of chunk transforms — Removed Rollup chunk string replacements modifying third-party code in web builds; Firebase Auth library strings (including http://localhost) remain untouched while build guard protects against development emulator settings and missing credentials.
+- 2026-10-13 — Upgrade local PostgreSQL from 16 to 18 Alpine with dedicated volume postgres_18_data — Match Cloud SQL PostgreSQL 18 major version, mount data at /var/lib/postgresql/18/docker matching image layout, and isolate from old postgres_data volume.
 
