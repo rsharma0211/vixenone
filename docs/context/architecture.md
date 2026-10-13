@@ -63,10 +63,13 @@ The local development stack consists of four Docker containers on a shared bridg
      - `GET /api/criteria`: Read-or-create user evaluation criteria.
      - `PUT /api/criteria`: Atomic criteria set replacement with strict 422 validations.
      - `GET /api/evaluations`: List evaluations and dynamically computed KPIs (`total`, `needs_action`, `analysed`, `open_clarifications`).
-     - `POST /api/evaluations`: Create evaluation with 2–3 vendors.
+     - `POST /api/evaluations`: Create evaluation in `draft` status with `title` and `category` required (`location` optional; `vendor_names` optional, 0–3).
      - `GET / PATCH / DELETE /api/evaluations/{id}`: Evaluation CRUD with storage file cleanup on delete.
+     - `POST /api/evaluations/{id}/vendors`: Add a vendor (trimmed 1–80 chars, case-insensitive unique per evaluation, max 3 vendors -> 422 `"An evaluation can have at most 3 vendors."`, appended at next position; 409 while a job is active; transitions `analysed` -> `stale`).
+     - `PATCH /api/evaluations/{id}/vendors/{vendor_id}`: Rename a vendor (trimmed 1–80 chars, case-insensitive unique per evaluation; 409 while a job is active; preserves evaluation status).
+     - `DELETE /api/evaluations/{id}/vendors/{vendor_id}`: Remove a vendor and cascade-delete its proposal document, stored file via `StorageService`, `document_pages`, `findings`, `criterion_scores`, `cost_breakdowns`, and `clarifications` in one transaction; re-numbers remaining vendor positions without gaps; 409 while a job is active; transitions `analysed` -> `stale`.
      - `POST / DELETE /api/evaluations/{id}/documents`: Content-based validation and replacement (409 while a job is active; cascade-deletes `document_pages`).
-     - `POST /api/evaluations/{id}/extract`: Starts `extract_requirements` background job (202 Accepted; 422 if docs missing; 409 if job active or user-edited requirements exist without `confirm_replace=true`).
+     - `POST /api/evaluations/{id}/extract`: Starts `extract_requirements` background job (202 Accepted; 422 unless requirements doc uploaded, at least 2 vendors exist, and every vendor has a proposal, naming what is missing; 409 if job active or user-edited requirements exist without `confirm_replace=true`).
      - `GET / PUT /api/evaluations/{id}/requirements`: Atomic requirements replacement (`analysed` -> `stale`).
      - `GET /api/evaluations/{id}/jobs/latest`: Latest background analysis job status, step_label, error_message, and timestamps.
      - `GET /api/evaluations/{id}/results`: Compliance matrix, costs, clarifications, and scoring with raw and display values.

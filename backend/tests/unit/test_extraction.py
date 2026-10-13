@@ -433,6 +433,37 @@ def test_extract_422_missing_docs():
     uid = f"uid-ext-422-{uuid.uuid4().hex}"
     with patch("firebase_admin.auth.verify_id_token", return_value=_fake_token(uid)):
         auth = {"Authorization": "Bearer token"}
+        pdf_bytes = make_valid_pdf_bytes(1)
+
+        # 1. Evaluation with only 1 vendor (and requirements + proposal uploaded) -> 422 "Add at least 2 vendors"
+        ev_one = client.post(
+            "/api/evaluations",
+            headers=auth,
+            json={"title": "One Vendor RFP", "category": "Facilities"},
+        ).json()
+        ev_one_id = ev_one["id"]
+        v_only = client.post(
+            f"/api/evaluations/{ev_one_id}/vendors",
+            headers=auth,
+            json={"name": "Solo Vendor"},
+        ).json()
+        client.post(
+            f"/api/evaluations/{ev_one_id}/documents",
+            headers=auth,
+            files={"file": ("req.pdf", pdf_bytes, "application/pdf")},
+            data={"kind": "requirements"},
+        )
+        client.post(
+            f"/api/evaluations/{ev_one_id}/documents",
+            headers=auth,
+            files={"file": ("solo.pdf", pdf_bytes, "application/pdf")},
+            data={"kind": "proposal", "vendor_id": v_only["id"]},
+        )
+        r_one_vendor = client.post(f"/api/evaluations/{ev_one_id}/extract", headers=auth)
+        assert r_one_vendor.status_code == 422
+        assert "Add at least 2 vendors" in r_one_vendor.json()["detail"]
+
+        # 2. Evaluation with 2 vendors, missing requirements doc or vendor proposals
         ev = client.post(
             "/api/evaluations",
             headers=auth,
@@ -448,9 +479,9 @@ def test_extract_422_missing_docs():
         # No docs at all -> 422
         r1 = client.post(f"/api/evaluations/{eval_id}/extract", headers=auth)
         assert r1.status_code == 422
+        assert "requirements document" in r1.json()["detail"].lower()
 
         # Upload requirements doc only (missing proposals) -> 422
-        pdf_bytes = make_valid_pdf_bytes(1)
         client.post(
             f"/api/evaluations/{eval_id}/documents",
             headers=auth,
@@ -459,8 +490,10 @@ def test_extract_422_missing_docs():
         )
         r2 = client.post(f"/api/evaluations/{eval_id}/extract", headers=auth)
         assert r2.status_code == 422
+        assert "Vendor 1" in r2.json()["detail"]
+        assert "Vendor 2" in r2.json()["detail"]
 
-        # Upload only Vendor 1 proposal (Vendor 2 proposal still missing) -> 422
+        # Upload only Vendor 1 proposal (Vendor 2 proposal still missing) -> 422 naming Vendor 2
         client.post(
             f"/api/evaluations/{eval_id}/documents",
             headers=auth,
@@ -469,6 +502,7 @@ def test_extract_422_missing_docs():
         )
         r3 = client.post(f"/api/evaluations/{eval_id}/extract", headers=auth)
         assert r3.status_code == 422
+        assert r3.json()["detail"] == "Upload a proposal for Vendor 2 or remove the vendor."
 
 
 def test_extract_409_active_job_and_upload_delete_409():

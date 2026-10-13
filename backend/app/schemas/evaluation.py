@@ -55,7 +55,8 @@ class FindingStatus(str, Enum):
 class EvaluationCreate(BaseModel):
     title: str = Field(..., min_length=1, max_length=255)
     category: str = Field(..., min_length=1, max_length=100)
-    vendor_names: List[str] = Field(..., min_length=2, max_length=3)
+    location: Optional[str] = None
+    vendor_names: Optional[List[str]] = Field(default_factory=list)
 
     @field_validator("title")
     @classmethod
@@ -75,14 +76,51 @@ class EvaluationCreate(BaseModel):
 
     @field_validator("vendor_names")
     @classmethod
-    def validate_vendors(cls, v: List[str]) -> List[str]:
-        cleaned = [name.strip() for name in v if name.strip()]
-        if len(cleaned) < 2 or len(cleaned) > 3:
-            raise ValueError("Must provide 2 or 3 non-empty vendor names")
+    def validate_vendors(cls, v: Optional[List[str]]) -> List[str]:
+        if v is None:
+            return []
+        if len(v) > 3:
+            raise ValueError("An evaluation can have at most 3 vendors.")
+        cleaned: List[str] = []
+        for name in v:
+            s = name.strip()
+            if not s:
+                raise ValueError("Vendor name cannot be empty")
+            if len(s) > 80:
+                raise ValueError("Vendor name cannot exceed 80 characters")
+            cleaned.append(s)
         lower_names = [name.lower() for name in cleaned]
         if len(set(lower_names)) != len(cleaned):
             raise ValueError("Vendor names must be unique")
         return cleaned
+
+
+class VendorCreate(BaseModel):
+    name: str
+
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, v: str) -> str:
+        s = v.strip()
+        if not s:
+            raise ValueError("Vendor name cannot be empty")
+        if len(s) > 80:
+            raise ValueError("Vendor name cannot exceed 80 characters")
+        return s
+
+
+class VendorUpdate(BaseModel):
+    name: str
+
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, v: str) -> str:
+        s = v.strip()
+        if not s:
+            raise ValueError("Vendor name cannot be empty")
+        if len(s) > 80:
+            raise ValueError("Vendor name cannot exceed 80 characters")
+        return s
 
 
 class EvaluationUpdate(BaseModel):

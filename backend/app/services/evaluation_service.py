@@ -210,6 +210,125 @@ class EvaluationService:
         await EvaluationRepository.delete_document(session, doc)
 
     @staticmethod
+    async def add_vendor(
+        session: AsyncSession,
+        user_id: uuid.UUID,
+        evaluation_id: uuid.UUID,
+        name: str,
+    ) -> VendorResponse:
+        eval_obj = await EvaluationRepository.get_by_id(session, user_id, evaluation_id)
+        if not eval_obj:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Evaluation {evaluation_id} not found",
+            )
+        if await EvaluationRepository.has_active_job(session, evaluation_id):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Cannot modify vendors while a job is active for this evaluation",
+            )
+        cleaned_name = name.strip()
+        if not cleaned_name or len(cleaned_name) > 80:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Vendor name must be between 1 and 80 characters.",
+            )
+        existing_vendors = sorted(eval_obj.vendors or [], key=lambda v: v.position)
+        if len(existing_vendors) >= 3:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="An evaluation can have at most 3 vendors.",
+            )
+        if any(v.name.strip().lower() == cleaned_name.lower() for v in existing_vendors):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"Vendor '{cleaned_name}' already exists in this evaluation.",
+            )
+        next_position = len(existing_vendors)
+        vendor = await EvaluationRepository.add_vendor(
+            session, eval_obj, cleaned_name, next_position
+        )
+        return VendorResponse.model_validate(vendor)
+
+    @staticmethod
+    async def rename_vendor(
+        session: AsyncSession,
+        user_id: uuid.UUID,
+        evaluation_id: uuid.UUID,
+        vendor_id: uuid.UUID,
+        name: str,
+    ) -> VendorResponse:
+        eval_obj = await EvaluationRepository.get_by_id(session, user_id, evaluation_id)
+        if not eval_obj:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Evaluation {evaluation_id} not found",
+            )
+        if await EvaluationRepository.has_active_job(session, evaluation_id):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Cannot modify vendors while a job is active for this evaluation",
+            )
+        existing_vendors = eval_obj.vendors or []
+        target_vendor = next((v for v in existing_vendors if v.id == vendor_id), None)
+        if not target_vendor:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Vendor {vendor_id} not found",
+            )
+        cleaned_name = name.strip()
+        if not cleaned_name or len(cleaned_name) > 80:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Vendor name must be between 1 and 80 characters.",
+            )
+        if any(
+            v.id != vendor_id and v.name.strip().lower() == cleaned_name.lower()
+            for v in existing_vendors
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"Vendor '{cleaned_name}' already exists in this evaluation.",
+            )
+        updated = await EvaluationRepository.rename_vendor(
+            session, eval_obj, target_vendor, cleaned_name
+        )
+        return VendorResponse.model_validate(updated)
+
+    @staticmethod
+    async def delete_vendor(
+        session: AsyncSession,
+        user_id: uuid.UUID,
+        evaluation_id: uuid.UUID,
+        vendor_id: uuid.UUID,
+        storage: Optional[StorageService] = None,
+    ) -> None:
+        eval_obj = await EvaluationRepository.get_by_id(session, user_id, evaluation_id)
+        if not eval_obj:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Evaluation {evaluation_id} not found",
+            )
+        if await EvaluationRepository.has_active_job(session, evaluation_id):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Cannot modify vendors while a job is active for this evaluation",
+            )
+        target_vendor = next((v for v in (eval_obj.vendors or []) if v.id == vendor_id), None)
+        if not target_vendor:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Vendor {vendor_id} not found",
+            )
+        storage_keys = await EvaluationRepository.delete_vendor(session, eval_obj, vendor_id)
+        storage_service = storage or get_storage()
+        for key in storage_keys:
+            try:
+                await storage_service.delete(key)
+            except Exception:
+                pass
+
+    @staticmethod
     async def start_extraction(
         session: AsyncSession,
         user_id: uuid.UUID,
@@ -238,10 +357,18 @@ class EvaluationService:
         }
         missing_vendors = [v.name for v in vendors if v.id not in proposal_vendor_ids]
 
-        if not has_req_doc or not vendors or missing_vendors:
+        missing_reasons: List[str] = []
+        if not has_req_doc:
+            missing_reasons.append("Upload a requirements document.")
+        if len(vendors) < 2:
+            missing_reasons.append("Add at least 2 vendors.")
+        for v_name in missing_vendors:
+            missing_reasons.append(f"Upload a proposal for {v_name} or remove the vendor.")
+
+        if missing_reasons:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail="Requirements document and a proposal for every vendor are required before extraction",
+                detail=" ".join(missing_reasons),
             )
 
         reqs = eval_obj.requirements or []

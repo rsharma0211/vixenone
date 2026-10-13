@@ -16,6 +16,9 @@ from app.schemas.evaluation import (
     EvaluationUpdate,
     ExtractRequirementsRequest,
     RequirementItem,
+    VendorCreate,
+    VendorResponse,
+    VendorUpdate,
 )
 from app.services.evaluation_service import EvaluationService
 from app.services.job_launcher import JobLauncher, get_job_launcher
@@ -93,6 +96,41 @@ async def delete_evaluation(
 ) -> Response:
     user = await UserService.get_or_create_profile(db, current_user)
     await EvaluationService.delete_evaluation(db, user.id, id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post("/{id}/vendors", response_model=VendorResponse, status_code=status.HTTP_201_CREATED)
+async def add_vendor(
+    id: uuid.UUID,
+    payload: VendorCreate,
+    current_user: AuthenticatedUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> VendorResponse:
+    user = await UserService.get_or_create_profile(db, current_user)
+    return await EvaluationService.add_vendor(db, user.id, id, payload.name)
+
+
+@router.patch("/{id}/vendors/{vendor_id}", response_model=VendorResponse)
+async def rename_vendor(
+    id: uuid.UUID,
+    vendor_id: uuid.UUID,
+    payload: VendorUpdate,
+    current_user: AuthenticatedUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> VendorResponse:
+    user = await UserService.get_or_create_profile(db, current_user)
+    return await EvaluationService.rename_vendor(db, user.id, id, vendor_id, payload.name)
+
+
+@router.delete("/{id}/vendors/{vendor_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_vendor(
+    id: uuid.UUID,
+    vendor_id: uuid.UUID,
+    current_user: AuthenticatedUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> Response:
+    user = await UserService.get_or_create_profile(db, current_user)
+    await EvaluationService.delete_vendor(db, user.id, id, vendor_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 

@@ -13,6 +13,7 @@ from app.models.evaluation import (
     CostBreakdown,
     CriterionScore,
     Document,
+    DocumentPage,
     Evaluation,
     Finding,
     Requirement,
@@ -80,7 +81,7 @@ class EvaluationRepository:
         kpis = {
             "total": total,
             "needs_action": needs_action,
-            "analysed":光明 if False else analysed,
+            "analysed": analysed,
             "open_clarifications": open_clarifications,
         }
         return evaluations, kpis
@@ -91,7 +92,7 @@ class EvaluationRepository:
         user_id: uuid.UUID,
         title: str,
         category: str,
-        vendor_names: List[str],
+        vendor_names: Optional[List[str]] = None,
     ) -> Evaluation:
         eval_obj = Evaluation(
             id=uuid.uuid4(),
@@ -102,7 +103,7 @@ class EvaluationRepository:
         )
         session.add(eval_obj)
 
-        for pos, name in enumerate(vendor_names):
+        for pos, name in enumerate(vendor_names or []):
             vendor = Vendor(
                 id=uuid.uuid4(),
                 evaluation_id=eval_obj.id,
@@ -113,6 +114,117 @@ class EvaluationRepository:
 
         await session.commit()
         return await EvaluationRepository.get_by_id(session, user_id, eval_obj.id)
+
+    @staticmethod
+    async def add_vendor(
+        session: AsyncSession,
+        eval_obj: Evaluation,
+        name: str,
+        position: int,
+    ) -> Vendor:
+        vendor = Vendor(
+            id=uuid.uuid4(),
+            evaluation_id=eval_obj.id,
+            name=name,
+            position=position,
+        )
+        session.add(vendor)
+        if eval_obj.status == EvaluationStatus.ANALYSED.value:
+            eval_obj.status = EvaluationStatus.STALE.value
+        eval_obj.updated_at = func.now()
+        await session.commit()
+        await session.refresh(vendor)
+        return vendor
+
+    @staticmethod
+    async def rename_vendor(
+        session: AsyncSession,
+        eval_obj: Evaluation,
+        vendor: Vendor,
+        name: str,
+    ) -> Vendor:
+        vendor.name = name
+        eval_obj.updated_at = func.now()
+        await session.commit()
+        await session.refresh(vendor)
+        return vendor
+
+    @staticmethod
+    async def delete_vendor(
+        session: AsyncSession,
+        eval_obj: Evaluation,
+        vendor_id: uuid.UUID,
+    ) -> List[str]:
+        evaluation_id = eval_obj.id
+
+        # Find proposal documents belonging to this vendor
+        doc_stmt = select(Document).where(
+            Document.evaluation_id == evaluation_id,
+            Document.vendor_id == vendor_id,
+        )
+        vendor_docs = list((await session.execute(doc_stmt)).scalars().all())
+        doc_ids = [d.id for d in vendor_docs]
+        storage_keys = [d.storage_key for d in vendor_docs]
+
+        # Delete everything tied to the vendor in one transaction
+        if doc_ids:
+            await session.execute(
+                delete(DocumentPage).where(DocumentPage.document_id.in_(doc_ids))
+            )
+        await session.execute(
+            delete(Finding).where(
+                Finding.evaluation_id == evaluation_id,
+                Finding.vendor_id == vendor_id,
+            )
+        )
+        await session.execute(
+            delete(CriterionScore).where(
+                CriterionScore.evaluation_id == evaluation_id,
+                CriterionScore.vendor_id == vendor_id,
+            )
+        )
+        await session.execute(
+            delete(CostBreakdown).where(
+                CostBreakdown.evaluation_id == evaluation_id,
+                CostBreakdown.vendor_id == vendor_id,
+            )
+        )
+        await session.execute(
+            delete(Clarification).where(
+                Clarification.evaluation_id == evaluation_id,
+                Clarification.vendor_id == vendor_id,
+            )
+        )
+        await session.execute(
+            delete(Document).where(
+                Document.evaluation_id == evaluation_id,
+                Document.vendor_id == vendor_id,
+            )
+        )
+        await session.execute(
+            delete(Vendor).where(
+                Vendor.id == vendor_id,
+                Vendor.evaluation_id == evaluation_id,
+            )
+        )
+
+        # Re-number remaining vendor positions without gaps
+        rem_stmt = (
+            select(Vendor)
+            .where(Vendor.evaluation_id == evaluation_id, Vendor.id != vendor_id)
+            .order_by(Vendor.position, Vendor.id)
+        )
+        remaining_vendors = list((await session.execute(rem_stmt)).scalars().all())
+        for new_pos, v in enumerate(remaining_vendors):
+            v.position = new_pos
+
+        if eval_obj.status == EvaluationStatus.ANALYSED.value:
+            eval_obj.status = EvaluationStatus.STALE.value
+        eval_obj.updated_at = func.now()
+
+        await session.commit()
+        session.expire_all()
+        return storage_keys
 
     @staticmethod
     async def update(
