@@ -58,7 +58,9 @@ def _make_real_docx_bytes() -> bytes:
     return buf.getvalue()
 
 
-def _setup_eval_with_all_docs(uid: str, pdf_pages: int = 2) -> tuple[str, dict, list[str]]:
+def _setup_eval_with_all_docs(
+    uid: str, pdf_pages: int = 2, v1_pdf_bytes: bytes | None = None
+) -> tuple[str, dict, list[str]]:
     auth = {"Authorization": "Bearer token"}
     ev = client.post(
         "/api/evaluations",
@@ -81,7 +83,7 @@ def _setup_eval_with_all_docs(uid: str, pdf_pages: int = 2) -> tuple[str, dict, 
     )
     assert r_req.status_code == 200
 
-    v1_pdf = make_valid_pdf_bytes(page_count=2)
+    v1_pdf = v1_pdf_bytes if v1_pdf_bytes is not None else make_valid_pdf_bytes(page_count=2)
     r_v1 = client.post(
         f"/api/evaluations/{eval_id}/documents",
         headers=auth,
@@ -310,15 +312,15 @@ def test_parallel_cap_respected():
         assert 2 <= fake_gemini.max_in_flight <= 4
 
 
+PROPOSAL_FAILURE_MARKER = b"FAIL_CORRUPTED_PROPOSAL"
+
+
 def test_proposal_failure_job_done_and_doc_error():
     uid = f"uid-ext-prop-fail-{uuid.uuid4().hex}"
-    call_idx = 0
 
     def _pdf_handler(pdf_bytes: bytes) -> list[PageText]:
-        nonlocal call_idx
-        call_idx += 1
-        # 1st PDF is requirements doc (succeeds), 2nd PDF is proposal (fails)
-        if call_idx == 2:
+        # Fails strictly by file content (distinctive bytes marker), not call order
+        if PROPOSAL_FAILURE_MARKER in pdf_bytes:
             raise GeminiClientError("Corrupted proposal PDF")
         return [PageText(page_number=1, text="Valid requirement page text")]
 
@@ -329,7 +331,12 @@ def test_proposal_failure_job_done_and_doc_error():
     try:
         with patch("firebase_admin.auth.verify_id_token", return_value=_fake_token(uid)):
             auth = {"Authorization": "Bearer token"}
-            eval_id, req_doc, prop_doc_ids = _setup_eval_with_all_docs(uid)
+            corrupted_prop_pdf = make_valid_pdf_bytes(
+                page_count=2, marker=PROPOSAL_FAILURE_MARKER
+            )
+            eval_id, req_doc, prop_doc_ids = _setup_eval_with_all_docs(
+                uid, v1_pdf_bytes=corrupted_prop_pdf
+            )
 
             resp = client.post(f"/api/evaluations/{eval_id}/extract", headers=auth)
             assert resp.status_code == 202

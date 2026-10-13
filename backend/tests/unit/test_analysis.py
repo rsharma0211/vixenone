@@ -587,12 +587,9 @@ def test_analyse_job_states_and_confirm_rerun():
 
 def test_analyse_all_or_nothing_atomic_transaction():
     uid = f"uid-p4-atomic-{uuid.uuid4().hex}"
-    call_count = 0
 
-    def _failing_vendor_handler(prompt: str) -> VendorAnalysisResult:
-        nonlocal call_count
-        call_count += 1
-        if call_count == 2:
+    def _failing_vendor_handler(vendor_name: str) -> VendorAnalysisResult:
+        if vendor_name == "Vendor B":
             raise GeminiClientError("Vendor B model failure")
         return VendorAnalysisResult(
             requirement_findings=[],

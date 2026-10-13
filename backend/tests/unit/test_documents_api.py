@@ -16,11 +16,13 @@ def fake_token(uid: str, email: str = "doc_user@vixenone.app"):
     return {"uid": uid, "email": email, "name": "Doc User"}
 
 
-def make_valid_pdf_bytes(page_count: int = 1) -> bytes:
-    """Construct a minimal valid PDF with given number of pages."""
+def make_valid_pdf_bytes(page_count: int = 1, marker: bytes = b"") -> bytes:
+    """Construct a minimal valid PDF with given number of pages and optional marker bytes."""
     kids = " ".join(f"{i+3} 0 R" for i in range(page_count))
+    marker_str = marker.decode("latin1") if marker else ""
+    catalog_extra = f" /Marker ({marker_str})".encode() if marker else b""
     obj_defs = [
-        b"1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n",
+        b"1 0 obj\n<< /Type /Catalog /Pages 2 0 R" + catalog_extra + b" >>\nendobj\n",
         f"2 0 obj\n<< /Type /Pages /Kids [{kids}] /Count {page_count} >>\nendobj\n".encode(),
     ]
     for i in range(page_count):
