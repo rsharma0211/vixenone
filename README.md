@@ -60,6 +60,56 @@ Containerized runner for Google Cloud SDK (`gcloud`) and Firebase CLI tools with
 - `make cloud-config` — Sets the gcloud project to `vixenone` and region to `asia-south1`.
 - `make cloud-check` — Prints the active account and project, and lists Cloud SQL instances, Cloud Storage buckets, Secret Manager secrets (names only), and Firebase projects.
 
+## Deploy
+
+Production deployment uses only Google Cloud and Firebase tools:
+
+1. **One-time setup (Google tools only)**:
+   - Authenticate tools:
+     ```bash
+     make cloud-login
+     ```
+   - Configure project and region:
+     ```bash
+     make cloud-config
+     ```
+   - Verify infrastructure and credentials:
+     ```bash
+     make cloud-check
+     ```
+   - Set the `PROD_*` variables in `.env` (project ID, region, artifact repo, Cloud SQL connection, service account, bucket, model, Firebase credentials). Ensure Secret Manager contains `GEMINI_API_KEY` and `DATABASE_URL`.
+   - Verify configuration:
+     ```bash
+     make deploy-config
+     ```
+
+2. **Deploy to production**:
+   - Run the complete automated deployment pipeline:
+     ```bash
+     make deploy
+     ```
+     (Supports `make deploy DRY_RUN=1` to preview all commands without modifying cloud resources).
+     This executes in order:
+     - Configuration check (`deploy-config`)
+     - Production API image build with Cloud Build (`build-api`)
+     - Database migrations execution via Cloud Run prepare job (`migrate`)
+     - Cloud Run service deployment for `vixenone-api` (`deploy-api`)
+     - Frontend production build in web container (`build-web`)
+     - Firebase Hosting deployment (`deploy-web`)
+     - Smoke test verification (`smoke`)
+
+3. **Seed demo data (first deploy only)**:
+   ```bash
+   make prod-seed
+   ```
+   > **Note:** Re-seeding wipes existing demo-user evaluations. You will be prompted to confirm by typing the production project ID. This is never run automatically as part of `make deploy`.
+
+4. **Verify production health**:
+   ```bash
+   make prod-smoke
+   ```
+   Checks that `https://<project>.web.app/api/health` returns HTTP 200 and unauthenticated `/api/me` returns HTTP 401.
+
 ## How to Reset Data
 
 To wipe all local state (Postgres database volume, Auth emulator accounts, and local uploads) and start fresh:

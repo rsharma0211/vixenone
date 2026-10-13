@@ -138,3 +138,30 @@ The local development stack consists of four Docker containers on a shared bridg
 1. `postgres` and `firebase-auth-emulator` boot and become healthy.
 2. `api` starts, runs `alembic upgrade head`, starts Uvicorn, and passes its healthcheck.
 3. `web` starts Vite and connects to `api`.
+
+## Production Architecture & Deploy Topology
+
+In production on Google Cloud:
+
+1. **Firebase Hosting**:
+   - Serves pre-built static frontend assets (`frontend/dist`) configured in `firebase.json` and `.firebaserc`.
+   - Rewrites `/api/**` directly to the Cloud Run service `vixenone-api` in `asia-south1`.
+   - Rewrites all other routes (`**`) to `/index.html` for single-page app routing.
+   - Enforces `Cache-Control: max-age=0, no-cache, no-store, must-revalidate` for `index.html` and 1-year immutable caching for `/assets/**`.
+   - Guarantees same-origin API access from the browser, eliminating CORS entirely.
+
+2. **Cloud Run Service (`vixenone-api`)**:
+   - Production API container built from multi-stage `backend/Dockerfile` target `production` containing runtime dependencies only (`pytest`, `ruff`, `mypy` absent).
+   - Starts in production mode (`ENV=production`, `PORT` dynamic binding, 1 worker, no boot migrations, no auto-reload).
+   - Resources: 1 GiB memory, 300 s request timeout, CPU always allocated (`--no-cpu-throttling`), min 1 and max 1 instance to isolate in-process background task execution.
+   - Attachments: Cloud SQL PostgreSQL 18 instance connection via Unix socket; Secret Manager secrets mounted as environment variables (`GEMINI_API_KEY=GEMINI_API_KEY:latest`, `DATABASE_URL=DATABASE_URL:latest`).
+   - Unauthenticated invocations permitted; token verification performed in-app via Firebase Admin SDK.
+
+3. **Cloud Run Job (`vixenone-prepare`)**:
+   - Dedicated prepare task reusing the production API image with args `prepare,migrate` (deploy-time schema migration) or `prepare,seed` (one-time demo user provisioning).
+   - Attached to Cloud SQL and Secret Manager secrets with 0 retries and 10 minute timeout.
+
+4. **Production Deploy Pipeline (`scripts/deploy.sh`)**:
+   - Automated steps: `config` (validates `PROD_*` variables without exposing secrets), `build-api` (uncommitted tree refusal guard, Cloud Build container push to Artifact Registry), `migrate` (updates and executes prepare job), `deploy-api` (deploys Cloud Run service), `build-web` (production build in web container with Firebase build guard), `deploy-web` (Firebase Hosting deploy), `smoke` (verifies HTTP 200 on `/api/health` and HTTP 401 on unauthenticated `/api/me`), and `seed` (isolated demo data seeding with project confirmation).
+   - Full dry-run execution simulation supported via `DRY_RUN=1`.
+

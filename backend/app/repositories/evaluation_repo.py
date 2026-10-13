@@ -1,9 +1,7 @@
-from datetime import datetime
-from decimal import Decimal
 from typing import Any, Dict, List, Optional, Tuple
 import uuid
 from fastapi import HTTPException, status
-from sqlalchemy import delete, desc, func, select, update
+from sqlalchemy import delete, desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -120,7 +118,9 @@ class EvaluationRepository:
             session.add(vendor)
 
         await session.commit()
-        return await EvaluationRepository.get_by_id(session, user_id, eval_obj.id)
+        created_eval = await EvaluationRepository.get_by_id(session, user_id, eval_obj.id)
+        assert created_eval is not None
+        return created_eval
 
     @staticmethod
     async def add_vendor(

@@ -1,11 +1,11 @@
 from datetime import datetime, timezone
 from typing import Optional
 import uuid
-from sqlalchemy import delete, func, select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import async_session
-from app.models.company import Company, Location
+from app.models.company import Location
 from app.models.evaluation import (
     AnalysisJob,
     Clarification,
@@ -49,15 +49,6 @@ async def seed_demo_data(session: Optional[AsyncSession] = None) -> None:
             return
 
         user = users[0]
-        extra_company_ids = [
-            u.company_id for u in users[1:] if u.company_id and u.company_id != user.company_id
-        ]
-        for extra in users[1:]:
-            await session.delete(extra)
-        await session.flush()
-        if extra_company_ids:
-            await session.execute(delete(Company).where(Company.id.in_(extra_company_ids)))
-
         user_id = user.id
 
         # 1. Ensure company exists and set demo company name

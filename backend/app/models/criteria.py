@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Optional
 import uuid
-from sqlalchemy import DateTime, Enum, Index, Integer, String, Text, UniqueConstraint, func
+from sqlalchemy import DateTime, Index, Integer, String, Text, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 

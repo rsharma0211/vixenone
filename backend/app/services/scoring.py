@@ -409,7 +409,7 @@ def compute_vendor_scores(
         result["raw_total"] = None
         result["display_total"] = None
     else:
-        raw_total = sum(raw_points_list) if raw_points_list else Decimal("0")
+        raw_total = sum(raw_points_list, Decimal("0"))
         result["incomplete"] = False
         result["raw_total"] = raw_total
         result["display_total"] = int(round_half_up(raw_total, 0))

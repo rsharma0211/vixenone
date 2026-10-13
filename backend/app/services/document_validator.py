@@ -13,10 +13,10 @@ def validate_document_content(
     content: bytes, filename: str
 ) -> Tuple[str, str, Optional[int]]:
     """Validate document content by signature and internal structure (not by file extension).
-    
+
     Returns:
         (detected_type, mime_type, page_count)
-        
+
     Raises:
         HTTPException(422) if invalid, corrupted, unsupported, oversized, or exceeding page limits.
     """
@@ -25,6 +25,8 @@ def validate_document_content(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=f"File exceeds maximum size of 10 MB ({len(content)} bytes)",
         )
+
+    page_count: Optional[int] = None
 
     # 1. Check for PDF signature
     if content.startswith(b"%PDF-"):

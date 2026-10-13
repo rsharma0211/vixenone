@@ -1,5 +1,4 @@
 import asyncio
-from concurrent.futures import ThreadPoolExecutor
 from unittest.mock import patch
 import uuid
 import pytest

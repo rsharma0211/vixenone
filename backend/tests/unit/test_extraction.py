@@ -21,11 +21,11 @@ from app.llm.client import (
     create_gemini_client,
 )
 from app.main import app
-from app.models.evaluation import AnalysisJob, Document, DocumentPage, Evaluation, Requirement
+from app.models.evaluation import AnalysisJob, Document, DocumentPage, Evaluation
 from app.services.ingestion import extract_docx_pages
 from app.services.job_launcher import InlineJobLauncher, get_job_launcher
 from app.services.worker import INTERRUPTED_MESSAGE, recover_interrupted_jobs, run_job_by_id
-from tests.unit.test_documents_api import make_valid_docx_bytes, make_valid_pdf_bytes
+from tests.unit.test_documents_api import make_valid_pdf_bytes
 
 client = TestClient(app)
 

@@ -10,19 +10,19 @@ from app.repositories.company_repo import CompanyRepository
 from app.repositories.criteria_repo import CriteriaRepository
 from app.repositories.evaluation_repo import EvaluationRepository
 from app.schemas.company import EvaluationLocationResponse
-from app.schemas.criteria import BUILTIN_CRITERIA_DEFAULTS
 from app.schemas.evaluation import (
     AnalysisJobResponse,
     CostBreakdownResponse,
     CriterionScoreCell,
+    CriterionScoreRow,
     DocumentResponse,
     EvaluationDetailResponse,
     EvaluationResultsResponse,
+    EvaluationStatus,
     EvaluationSummaryResponse,
     FindingEvidence,
     FindingResponse,
     RecommendationResponse,
-    RequirementItem,
     VendorResponse,
     VendorResultItem,
     VendorTotalResult,
@@ -32,7 +32,6 @@ from app.services.job_launcher import JobLauncher
 from app.services.scoring import (
     compute_recommendation,
     compute_vendor_scores,
-    round_half_up,
 )
 from app.services.storage import StorageService, get_storage
 
@@ -84,7 +83,7 @@ class EvaluationService:
                     name_short=e.title.split("—")[0].strip() if "—" in e.title else e.title,
                     category=e.category,
                     location=EvaluationLocationResponse.model_validate(e.location) if e.location else None,
-                    status=e.status,
+                    status=EvaluationStatus(e.status),
                     lifecycle_status=EvaluationService._map_lifecycle_status(e.status),
                     vendors_count=vendors_count,
                     total_requirements=total_reqs,
@@ -112,7 +111,7 @@ class EvaluationService:
             title=eval_obj.title,
             category=eval_obj.category,
             location=EvaluationLocationResponse.model_validate(eval_obj.location) if eval_obj.location else None,
-            status=eval_obj.status,
+            status=EvaluationStatus(eval_obj.status),
             criteria_snapshot=eval_obj.criteria_snapshot,
             created_at=eval_obj.created_at,
             updated_at=eval_obj.updated_at,
@@ -654,28 +653,28 @@ class EvaluationService:
             vendor_scoring_results[v_id_str] = compute_vendor_scores(v_raw_scores, snapshot)
 
         # Build scoring matrix rows
-        scoring_rows = []
+        scoring_rows: List[CriterionScoreRow] = []
         for item in snapshot:
             ckey = item["key"]
-            row_vendor_scores = {}
+            row_vendor_scores: Dict[str, CriterionScoreCell] = {}
             for v in vendors:
                 v_id_str = str(v.id)
                 cell_data = vendor_scoring_results[v_id_str]["criteria_scores"].get(ckey, {})
                 sc = cell_data.get("score")
                 pts = cell_data.get("points")
                 raw_pts = cell_data.get("raw_points")
-                row_vendor_scores[v_id_str] = {
-                    "score": float(sc) if sc is not None else None,
-                    "points": float(pts) if pts is not None else None,
-                    "raw_points": float(raw_pts) if raw_pts is not None else None,
-                }
+                row_vendor_scores[v_id_str] = CriterionScoreCell(
+                    score=float(sc) if sc is not None else None,
+                    points=float(pts) if pts is not None else None,
+                    raw_points=float(raw_pts) if raw_pts is not None else None,
+                )
             scoring_rows.append(
-                {
-                    "criterion": item["name"],
-                    "criterion_key": ckey,
-                    "weight": item["weight"],
-                    "vendor_scores": row_vendor_scores,
-                }
+                CriterionScoreRow(
+                    criterion=item["name"],
+                    criterion_key=ckey,
+                    weight=item["weight"],
+                    vendor_scores=row_vendor_scores,
+                )
             )
 
         # Build vendor_totals map

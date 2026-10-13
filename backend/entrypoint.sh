@@ -2,8 +2,9 @@
 set -e
 
 if [ "$1" = "prepare" ]; then
-    echo "Executing prepare command..."
-    exec python -m app.cli.prepare
+    shift
+    echo "Executing prepare command with args: $*..."
+    exec python -m app.cli.prepare "$@"
 fi
 
 if [ "$#" -gt 0 ]; then

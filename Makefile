@@ -1,20 +1,32 @@
-.PHONY: help up down logs seed prepare reset migrate db-shell test types lint lint-api type-check type-check-api cloud-login cloud-config cloud-check
+.PHONY: help up down logs seed prepare reset migrate db-shell test types lint lint-fix lint-api lint-fix-api type-check type-check-api cloud-login cloud-config cloud-check deploy-config deploy-api deploy-web deploy prod-smoke prod-seed
+
+DRY_RUN ?= 0
+DRY_FLAG = $(if $(filter 1 true TRUE yes,$(DRY_RUN)),--dry-run,)
 
 help:
 	@echo "Available commands:"
-	@echo "  make up          - Build and start full stack (postgres, auth emulator, api, web)"
-	@echo "  make down        - Gracefully stop full stack (persists emulator and db data)"
-	@echo "  make logs        - Follow container logs"
-	@echo "  make seed        - Seed demo user (demo@vixenone.app / demo1234) into Auth emulator"
-	@echo "  make reset       - Stop stack, wipe db volume, emulator data & uploads, start fresh"
-	@echo "  make migrate     - Run Alembic database migrations"
-	@echo "  make db-shell    - Open psql shell inside postgres container"
-	@echo "  make test        - Run backend unit tests inside api container"
-	@echo "  make types       - Generate frontend types from OpenAPI schema"
-	@echo "  make lint        - Run basic lint/syntax checks"
+	@echo "  make up           - Build and start full stack (postgres, auth emulator, api, web)"
+	@echo "  make down         - Gracefully stop full stack (persists emulator and db data)"
+	@echo "  make logs         - Follow container logs"
+	@echo "  make seed         - Seed demo user (demo@vixenone.app / demo1234) into Auth emulator"
+	@echo "  make prepare      - Run prepare command (MODE=migrate or MODE=seed, default seed)"
+	@echo "  make reset        - Stop stack, wipe db volume, emulator data & uploads, start fresh"
+	@echo "  make migrate      - Run Alembic database migrations"
+	@echo "  make db-shell     - Open psql shell inside postgres container"
+	@echo "  make test         - Run backend unit tests inside api container"
+	@echo "  make types        - Generate frontend types from OpenAPI schema"
+	@echo "  make lint         - Run lint/syntax checks (read-only)"
+	@echo "  make lint-fix     - Auto-fix lint errors"
+	@echo "  make type-check   - Run type checker (mypy)"
 	@echo "  make cloud-login  - Authenticate gcloud, ADC, and Firebase via interactive terminal"
 	@echo "  make cloud-config - Set gcloud project (vixenone) and region (asia-south1)"
 	@echo "  make cloud-check  - Verify active account, project, Cloud SQL, buckets, secrets, and Firebase"
+	@echo "  make deploy-config - Validate and print production environment configuration"
+	@echo "  make deploy-api   - Build production API image, apply migrations, and deploy Cloud Run service"
+	@echo "  make deploy-web   - Build frontend in web container and deploy to Firebase Hosting"
+	@echo "  make deploy       - Full production deploy (config, api, web, smoke check; DRY_RUN=1 supported)"
+	@echo "  make prod-smoke   - Run smoke check against production deployment"
+	@echo "  make prod-seed    - Seed demo user in production Cloud Run job (prompts for confirmation)"
 
 up:
 	@mkdir -p emulator-data uploads
@@ -35,9 +47,9 @@ seed:
 
 prepare:
 	@if docker compose ps --services --filter "status=running" | grep -q "^api$$"; then \
-		docker compose exec -T api python -m app.cli.prepare; \
+		docker compose exec -T api python -m app.cli.prepare $(MODE); \
 	else \
-		docker compose run --rm -T api prepare; \
+		docker compose run --rm -T api prepare $(MODE); \
 	fi
 
 reset:
@@ -64,11 +76,20 @@ types:
 
 lint: lint-api
 
+lint-fix: lint-fix-api
+
 lint-api:
 	@if docker compose ps --services --filter "status=running" | grep -q "^api$$"; then \
 		docker compose exec -T api ruff check app tests; \
 	else \
 		docker compose run --rm -T api ruff check app tests; \
+	fi
+
+lint-fix-api:
+	@if docker compose ps --services --filter "status=running" | grep -q "^api$$"; then \
+		docker compose exec -T api ruff check --fix app tests; \
+	else \
+		docker compose run --rm -T api ruff check --fix app tests; \
 	fi
 
 type-check: type-check-api
@@ -107,3 +128,22 @@ cloud-check:
 	@echo ""
 	@echo "=== Firebase Projects ==="
 	@./scripts/cloud-tools.sh firebase projects:list
+
+deploy-config:
+	@./scripts/deploy.sh $(DRY_FLAG) config
+
+deploy-api:
+	@./scripts/deploy.sh $(DRY_FLAG) deploy-api
+
+deploy-web:
+	@./scripts/deploy.sh $(DRY_FLAG) deploy-web
+
+deploy:
+	@./scripts/deploy.sh $(DRY_FLAG) deploy
+
+prod-smoke:
+	@./scripts/deploy.sh $(DRY_FLAG) smoke
+
+prod-seed:
+	@./scripts/deploy.sh $(DRY_FLAG) seed
+

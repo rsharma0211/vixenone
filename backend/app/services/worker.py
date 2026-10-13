@@ -1,7 +1,7 @@
 import asyncio
 from datetime import datetime, timezone
 import logging
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, cast
 import uuid
 from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -263,7 +263,8 @@ async def _run_extract_requirements(
 
     for desc in doc_descriptors:
         if desc["kind"] == "requirements":
-            req_doc_id = desc["id"]
+            raw_id = desc["id"]
+            req_doc_id = raw_id if isinstance(raw_id, uuid.UUID) else uuid.UUID(str(raw_id))
             break
 
     if req_doc_id is None:
@@ -540,7 +541,7 @@ async def _run_analyse(
                     }
                     for b_key, b_data in sorted(
                         BUILTIN_CRITERIA_DEFAULTS.items(),
-                        key=lambda kv: kv[1]["position"],
+                        key=lambda kv: cast(int, kv[1]["position"]),
                     )
                 ]
             eval_obj.criteria_snapshot = criteria_snapshot
@@ -663,9 +664,9 @@ async def _run_analyse(
     judged_keys_set = {c["key"] for c in judged_criteria}
 
     for v_desc in vendor_descriptors:
-        v_id = v_desc["id"]
-        doc_id: Optional[uuid.UUID] = v_desc["doc_id"]
-        v_pages: List[PageText] = v_desc["pages"]
+        v_id = cast(uuid.UUID, v_desc["id"])
+        doc_id: Optional[uuid.UUID] = cast(Optional[uuid.UUID], v_desc["doc_id"])
+        v_pages: List[PageText] = cast(List[PageText], v_desc["pages"])
         v_analysis = vendor_results[v_id]
 
         # Index requirement findings by normalised code
@@ -680,9 +681,9 @@ async def _run_analyse(
         vendor_questions: List[Optional[str]] = []
 
         for r_desc in req_descriptors:
-            r_id: uuid.UUID = r_desc["id"]
-            r_code: str = r_desc["code"]
-            r_mand: bool = r_desc["mandatory"]
+            r_id: uuid.UUID = cast(uuid.UUID, r_desc["id"])
+            r_code: str = cast(str, r_desc["code"])
+            r_mand: bool = bool(r_desc["mandatory"])
             rf = rf_by_code.get(r_code.strip().lower())
 
             if rf is not None:

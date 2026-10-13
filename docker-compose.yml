@@ -51,6 +51,7 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
+      target: development
     container_name: vixenone-api
     ports:
       - "8000:8000"

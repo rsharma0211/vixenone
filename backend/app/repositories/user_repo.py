@@ -54,8 +54,8 @@ class UserRepository:
             )
             .returning(User)
         )
-        result = await session.scalars(insert_stmt)
-        created_user = result.one()
+        scalars_result = await session.scalars(insert_stmt)
+        created_user = scalars_result.one()
         if created_user.company_id != new_company_id:
             await session.execute(
                 delete(Company).where(Company.id == new_company_id)

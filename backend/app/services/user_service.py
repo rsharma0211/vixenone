@@ -1,4 +1,3 @@
-from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth import AuthenticatedUser

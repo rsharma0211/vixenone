@@ -2,7 +2,6 @@ import io
 from unittest.mock import patch
 import uuid
 import zipfile
-import pytest
 from fastapi.testclient import TestClient
 
 from app.main import app

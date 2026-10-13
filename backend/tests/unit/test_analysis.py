@@ -3,7 +3,6 @@ from decimal import Decimal
 import io
 import os
 from pathlib import Path
-from typing import Any, Dict, List, Optional
 from unittest.mock import patch
 import uuid
 
@@ -18,7 +17,6 @@ from app.llm.client import (
     ExtractedCostItem,
     ExtractedCriterionFinding,
     ExtractedRequirementFinding,
-    ExtractedStandaloneRisk,
     FakeGeminiClient,
     GeminiClientError,
     PageText,
@@ -26,19 +24,14 @@ from app.llm.client import (
 )
 from app.main import app
 from app.models.evaluation import (
-    AnalysisJob,
-    Clarification,
     CostBreakdown,
     CriterionScore,
     Document,
     Evaluation,
     Finding,
-    Requirement,
-    Vendor,
 )
 from app.services.job_launcher import InlineJobLauncher, get_job_launcher
 from app.services.scoring import (
-    MISSING_BASE_UNKNOWN_LABEL,
     compute_cost_amounts,
     compute_cost_comparability_score,
     compute_judged_criterion_score,
@@ -48,14 +41,11 @@ from app.services.scoring import (
     deduplicate_clarifications,
 )
 from app.services.verification import (
-    normalise_text_for_verification,
     verify_quote_against_pages,
 )
+from tests.unit.test_documents_api import make_valid_pdf_bytes
 
 client = TestClient(app)
-
-
-from tests.unit.test_documents_api import make_valid_pdf_bytes
 
 
 def _fake_token(uid: str, email: str = "phase4_user@vixenone.app") -> dict:
@@ -858,10 +848,7 @@ def test_cross_user_404_on_analyse_and_weights():
     reason="Live Gemini analysis smoke test skipped unless RUN_GEMINI_LIVE=1",
 )
 def test_live_gemini_smoke_full_pipeline():
-    import os
     import time
-    from pathlib import Path
-    from app.services.worker import extract_docx_pages
     from app.llm.client import create_gemini_client
 
     dataset_dir = None

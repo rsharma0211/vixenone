@@ -1,8 +1,7 @@
-from datetime import datetime
-from typing import List, Optional
+from typing import List, cast
 import uuid
 from fastapi import HTTPException, status
-from sqlalchemy import delete, select
+from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql import func
@@ -34,7 +33,7 @@ class CriteriaRepository:
 
         missing_builtins = all_builtin_keys - builtin_keys_present
         if missing_builtins:
-            for b_key in sorted(missing_builtins, key=lambda k: BUILTIN_CRITERIA_DEFAULTS[k]["position"]):
+            for b_key in sorted(missing_builtins, key=lambda k: cast(int, BUILTIN_CRITERIA_DEFAULTS[k]["position"])):
                 default_data = BUILTIN_CRITERIA_DEFAULTS[b_key]
                 insert_stmt = (
                     insert(EvaluationCriterion)
@@ -75,7 +74,7 @@ class CriteriaRepository:
         items: List[EvaluationCriterionUpdateItem],
     ) -> List[EvaluationCriterion]:
         """Atomically replace criteria set with strict validation.
-        
+
         Rules:
         - All 5 built-ins present.
         - Built-in name and guidance unchanged.
@@ -167,7 +166,7 @@ class CriteriaRepository:
             db_builtin = existing_builtin_map.get(b_key)
             if db_builtin:
                 db_builtin.weight = b_item.weight
-                db_builtin.position = b_item.position if b_item.position is not None else canonical["position"]
+                db_builtin.position = b_item.position if b_item.position is not None else cast(int, BUILTIN_CRITERIA_DEFAULTS[b_key]["position"])
                 db_builtin.updated_at = func.now()
 
         # Handle custom criteria

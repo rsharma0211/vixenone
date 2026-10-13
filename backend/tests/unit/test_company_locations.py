@@ -4,7 +4,7 @@ import uuid
 import pytest
 from fastapi.testclient import TestClient
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy import func, select, text
+from sqlalchemy import select, text
 
 from app.core.database import async_session
 from app.main import app
@@ -378,7 +378,7 @@ def test_demo_seed_twice_company_locations_links_and_housekeeping_totals():
         comp = client.get("/api/company", headers=auth).json()
         assert comp["name"] == "Northbridge Properties Pvt Ltd"
         assert len(comp["locations"]) == 4
-        assert [(l["name"], l["city"], l["position"], l["evaluation_count"]) for l in comp["locations"]] == [
+        assert [(loc["name"], loc["city"], loc["position"], loc["evaluation_count"]) for loc in comp["locations"]] == [
             ("Andheri East Office", "Mumbai", 0, 1),
             ("Powai Campus", "Mumbai", 1, 1),
             ("BKC Office", "Mumbai", 2, 1),

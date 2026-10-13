@@ -1,13 +1,14 @@
 import logging
 from typing import Any
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth import AuthenticatedUser, init_firebase
 from app.core.config import settings
 from app.core.database import async_session
 from app.models.company import Company
+from app.models.evaluation import Evaluation
 from app.models.user import User
 from app.schemas.user import UserProfileUpdate, UserRole
 from app.services.seed_demo import DEMO_EMAIL, seed_demo_data
@@ -69,19 +70,36 @@ async def run_seed(
             display_name=getattr(user_record, "display_name", None) or DEMO_DISPLAY_NAME,
         )
 
-        # Reconcile user rows for DEMO_EMAIL to ensure exactly one user with firebase_uid = user_record.uid
+        # Reconcile user rows for DEMO_EMAIL strictly according to the rule:
+        # - only rows with the demo email are ever touched;
+        # - a demo-email row is deleted only if it owns no evaluations;
+        # - otherwise it is updated to the current Firebase id;
+        # - rows with any other email are never touched.
         stmt_by_email = select(User).where(User.email == DEMO_EMAIL).order_by(User.created_at)
         res_email = await session.execute(stmt_by_email)
         demo_users = list(res_email.scalars().all())
 
         if demo_users:
-            matching_user = next((u for u in demo_users if u.firebase_uid == user_record.uid), None)
-            user = matching_user or demo_users[0]
-            other_users = [u for u in demo_users if u.id != user.id]
+            demo_users_with_evals: list[User] = []
+            demo_users_without_evals: list[User] = []
+            for u in demo_users:
+                eval_count_stmt = select(func.count(Evaluation.id)).where(Evaluation.user_id == u.id)
+                count = (await session.execute(eval_count_stmt)).scalar_one()
+                if count > 0:
+                    demo_users_with_evals.append(u)
+                else:
+                    demo_users_without_evals.append(u)
+
+            if demo_users_with_evals:
+                user = next((u for u in demo_users_with_evals if u.firebase_uid == user_record.uid), None) or demo_users_with_evals[0]
+            else:
+                user = next((u for u in demo_users_without_evals if u.firebase_uid == user_record.uid), None) or demo_users_without_evals[0]
+
+            rows_to_delete = [u for u in demo_users_without_evals if u.id != user.id]
             extra_company_ids = [
-                u.company_id for u in other_users if u.company_id and u.company_id != user.company_id
+                u.company_id for u in rows_to_delete if u.company_id and u.company_id != user.company_id
             ]
-            for extra in other_users:
+            for extra in rows_to_delete:
                 await session.delete(extra)
             await session.flush()
 

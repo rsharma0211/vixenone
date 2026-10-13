@@ -1,11 +1,9 @@
-import io
 from unittest.mock import patch
 import uuid
-import pytest
 from fastapi.testclient import TestClient
 
 from app.main import app
-from app.models.evaluation import Evaluation, Vendor, Requirement, Document
+from app.models.evaluation import Evaluation, Document
 from app.core.database import async_session
 import asyncio
 
@@ -189,9 +187,7 @@ def test_delete_cascades_rows_and_files():
         )
         eval_id = create_resp.json()["id"]
 
-        # Upload a minimal valid PDF
-        import pdfplumber
-        # Generate minimal valid single-page PDF with pdfplumber / raw PDF syntax
+        # Generate minimal valid single-page PDF with raw PDF syntax
         raw_pdf = (
             b"%PDF-1.4\n"
             b"1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n"
