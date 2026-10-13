@@ -26,7 +26,9 @@ export type LocationCreate = Schemas['LocationCreate'];
 export type LocationUpdate = Schemas['LocationUpdate'];
 export type EvaluationLocationResponse = Schemas['EvaluationLocationResponse'];
 
-const BASE_URL = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
+const BASE_URL = (
+  import.meta.env.PROD ? '' : (import.meta.env.VITE_API_BASE_URL || '')
+).replace(/\/$/, '');
 
 export interface UserProfile {
   id?: string;
