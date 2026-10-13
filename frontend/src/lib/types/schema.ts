@@ -268,6 +268,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/evaluations/{id}/analyse": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Analyse Evaluation */
+        post: operations["analyse_evaluation_api_evaluations__id__analyse_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/evaluations/{id}/weights": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Update Weights */
+        put: operations["update_weights_api_evaluations__id__weights_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/health": {
         parameters: {
             query?: never;
@@ -306,6 +340,14 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** AnalyseEvaluationRequest */
+        AnalyseEvaluationRequest: {
+            /**
+             * Confirm Rerun
+             * @default false
+             */
+            confirm_rerun: boolean;
+        };
         /** AnalysisJobResponse */
         AnalysisJobResponse: {
             /**
@@ -383,11 +425,11 @@ export interface components {
              */
             vendor_id: string;
             /** Monthly Base */
-            monthly_base: number;
+            monthly_base?: number | null;
             /** Gst 18 */
-            gst_18: number;
+            gst_18?: number | null;
             /** Monthly Total */
-            monthly_total: number;
+            monthly_total?: number | null;
             /** Included */
             included: string[];
             /** Excluded */
@@ -597,6 +639,10 @@ export interface components {
         EvaluationResultsResponse: {
             /** Status */
             status: string;
+            /** Company Name */
+            company_name?: string | null;
+            /** Criteria Snapshot */
+            criteria_snapshot?: Record<string, never>[] | null;
             /** Vendors */
             vendors: components["schemas"]["VendorResultItem"][];
             /** Findings */
@@ -613,8 +659,7 @@ export interface components {
             vendor_totals: {
                 [key: string]: components["schemas"]["VendorTotalResult"];
             };
-            /** Recommendation */
-            recommendation?: Record<string, never> | null;
+            recommendation?: components["schemas"]["RecommendationResponse"] | null;
         };
         /**
          * EvaluationStatus
@@ -793,6 +838,15 @@ export interface components {
             /** City */
             city?: string | null;
         };
+        /** RecommendationResponse */
+        RecommendationResponse: {
+            /** State */
+            state: string;
+            /** Vendor Id */
+            vendor_id?: string | null;
+            /** Reasons */
+            reasons?: string[];
+        };
         /** RequirementItem */
         RequirementItem: {
             /** Id */
@@ -894,22 +948,62 @@ export interface components {
             tag?: string | null;
             /** Score */
             score?: number | null;
+            /** Display Total */
+            display_total?: number | null;
             /** Raw Score */
             raw_score?: number | null;
-            /** Mandatory Failures */
+            /** Exact Total */
+            exact_total?: number | null;
+            /**
+             * Mandatory Met
+             * @default 0
+             */
+            mandatory_met: number;
+            /**
+             * Mandatory Total
+             * @default 0
+             */
+            mandatory_total: number;
+            /**
+             * Mandatory Failures
+             * @default 0
+             */
             mandatory_failures: number;
+            /**
+             * Mandatory Not Evidenced
+             * @default 0
+             */
+            mandatory_not_evidenced: number;
+            /**
+             * Mandatory Needs Review
+             * @default 0
+             */
+            mandatory_needs_review: number;
             /** Monthly Base Inr */
-            monthly_base_inr: number;
-            /** Gst Rate */
+            monthly_base_inr?: number | null;
+            /**
+             * Gst Rate
+             * @default 0.18
+             */
             gst_rate: number;
             /** Monthly Gst Inr */
-            monthly_gst_inr: number;
+            monthly_gst_inr?: number | null;
             /** Monthly Total Inr */
-            monthly_total_inr: number;
-            /** Unknown Costs Count */
+            monthly_total_inr?: number | null;
+            /**
+             * Unknown Costs Count
+             * @default 0
+             */
             unknown_costs_count: number;
-            /** Needs Review Count */
+            /**
+             * Needs Review Count
+             * @default 0
+             */
             needs_review_count: number;
+            /** Criterion Scores */
+            criterion_scores?: {
+                [key: string]: components["schemas"]["CriterionScoreCell"];
+            };
         };
         /** VendorTotalResult */
         VendorTotalResult: {
@@ -1653,6 +1747,78 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EvaluationResultsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    analyse_evaluation_api_evaluations__id__analyse_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["AnalyseEvaluationRequest"] | null;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnalysisJobResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_weights_api_evaluations__id__weights_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: number;
+                };
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {

@@ -7,6 +7,7 @@ from sqlalchemy import delete, desc, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.models.company import Company
 from app.models.evaluation import (
     AnalysisJob,
     Clarification,
@@ -19,6 +20,7 @@ from app.models.evaluation import (
     Requirement,
     Vendor,
 )
+from app.models.user import User
 from app.schemas.evaluation import EvaluationStatus, RequirementItem
 
 
@@ -488,8 +490,18 @@ class EvaluationRepository:
         d_res = await session.execute(d_stmt)
         docs_map = {doc.id: doc.filename for doc in d_res.scalars().all()}
 
+        # Fetch company name for print header
+        comp_stmt = (
+            select(Company.name)
+            .join(User, User.company_id == Company.id)
+            .where(User.id == user_id)
+        )
+        comp_res = await session.execute(comp_stmt)
+        company_name = comp_res.scalar_one_or_none()
+
         return {
             "evaluation": eval_obj,
+            "company_name": company_name,
             "vendors": vendors,
             "findings": findings,
             "costs": costs,
@@ -497,3 +509,13 @@ class EvaluationRepository:
             "criterion_scores": criterion_scores,
             "docs_map": docs_map,
         }
+
+    @staticmethod
+    async def update_criteria_snapshot(
+        session: AsyncSession,
+        eval_obj: Evaluation,
+        snapshot: List[Dict[str, Any]],
+    ) -> None:
+        eval_obj.criteria_snapshot = snapshot
+        eval_obj.updated_at = func.now()
+        await session.commit()

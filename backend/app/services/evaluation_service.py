@@ -2,6 +2,7 @@ from decimal import Decimal
 from typing import Any, Dict, List, Optional
 import uuid
 from fastapi import HTTPException, UploadFile, status
+from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.evaluation import Document, Evaluation
@@ -13,12 +14,14 @@ from app.schemas.criteria import BUILTIN_CRITERIA_DEFAULTS
 from app.schemas.evaluation import (
     AnalysisJobResponse,
     CostBreakdownResponse,
+    CriterionScoreCell,
     DocumentResponse,
     EvaluationDetailResponse,
     EvaluationResultsResponse,
     EvaluationSummaryResponse,
     FindingEvidence,
     FindingResponse,
+    RecommendationResponse,
     RequirementItem,
     VendorResponse,
     VendorResultItem,
@@ -26,7 +29,11 @@ from app.schemas.evaluation import (
 )
 from app.services.document_validator import validate_document_content
 from app.services.job_launcher import JobLauncher
-from app.services.scoring import compute_vendor_scores, round_half_up
+from app.services.scoring import (
+    compute_recommendation,
+    compute_vendor_scores,
+    round_half_up,
+)
 from app.services.storage import StorageService, get_storage
 
 
@@ -428,6 +435,158 @@ class EvaluationService:
                 pass
 
     @staticmethod
+    async def start_analysis(
+        session: AsyncSession,
+        user_id: uuid.UUID,
+        evaluation_id: uuid.UUID,
+        confirm_rerun: bool,
+        launcher: JobLauncher,
+    ) -> AnalysisJobResponse:
+        eval_obj = await EvaluationRepository.get_by_id(session, user_id, evaluation_id)
+        if not eval_obj:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Evaluation {evaluation_id} not found",
+            )
+
+        if await EvaluationRepository.has_active_job(session, evaluation_id):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="A job is already active for this evaluation",
+            )
+
+        if eval_obj.status == "analysed" and not confirm_rerun:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Evaluation is already analysed. Pass confirm_rerun=true to re-run analysis.",
+            )
+
+        vendors = eval_obj.vendors or []
+        docs = eval_obj.documents or []
+        reqs = eval_obj.requirements or []
+
+        req_doc = next((d for d in docs if d.kind == "requirements"), None)
+        proposals_by_vendor = {
+            d.vendor_id: d for d in docs if d.kind == "proposal" and d.vendor_id is not None
+        }
+
+        missing_reasons: List[str] = []
+        if len(vendors) < 2:
+            missing_reasons.append("Add at least 2 vendors.")
+        if req_doc is None:
+            missing_reasons.append("Requirements document is missing (not ready).")
+        elif req_doc.status != "ready":
+            missing_reasons.append("Requirements document is not ready.")
+
+        for v in sorted(vendors, key=lambda x: x.position):
+            p_doc = proposals_by_vendor.get(v.id)
+            if p_doc is None:
+                missing_reasons.append(f"Proposal for {v.name} is missing (not ready).")
+            elif p_doc.status != "ready":
+                missing_reasons.append(f"Proposal for {v.name} is not ready.")
+
+        if len(reqs) < 1:
+            missing_reasons.append("Add at least 1 requirement.")
+
+        if missing_reasons:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=" ".join(missing_reasons),
+            )
+
+        # Snapshot the user's current criteria onto the evaluation
+        user_criteria = await CriteriaRepository.get_or_create_builtins(session, user_id)
+        snapshot = [
+            {
+                "key": c.builtin_key if c.kind == "builtin" and c.builtin_key else f"custom:{c.id}",
+                "kind": c.kind,
+                "name": c.name,
+                "guidance": c.guidance,
+                "weight": int(c.weight),
+            }
+            for c in user_criteria
+        ]
+        eval_obj.criteria_snapshot = snapshot
+        eval_obj.updated_at = func.now()
+
+        # Create job kind analyse; step_label "Analysing vendor 1 of M"
+        job = await EvaluationRepository.create_job(
+            session=session,
+            evaluation_id=evaluation_id,
+            kind="analyse",
+            step_label=f"Analysing vendor 1 of {len(vendors)}",
+        )
+        await launcher.launch(job.id)
+        await session.refresh(job)
+        return AnalysisJobResponse.model_validate(job)
+
+    @staticmethod
+    async def update_weights(
+        session: AsyncSession,
+        user_id: uuid.UUID,
+        evaluation_id: uuid.UUID,
+        payload: Dict[str, Any],
+    ) -> EvaluationResultsResponse:
+        eval_obj = await EvaluationRepository.get_by_id(session, user_id, evaluation_id)
+        if not eval_obj:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Evaluation {evaluation_id} not found",
+            )
+
+        if not eval_obj.criteria_snapshot:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Evaluation has no criteria snapshot. Run analysis first.",
+            )
+
+        # Allow unwrapping if passed {"weights": {...}}
+        weights_map = (
+            payload.get("weights")
+            if isinstance(payload.get("weights"), dict) and len(payload) == 1
+            else payload
+        )
+
+        if not isinstance(weights_map, dict) or not weights_map:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Weights payload must be a map of criterion key to integer weight.",
+            )
+
+        snapshot = eval_obj.criteria_snapshot
+        snapshot_keys = {item["key"] for item in snapshot}
+        submitted_keys = set(weights_map.keys())
+
+        if submitted_keys != snapshot_keys:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"Weight keys must exactly match snapshot criteria keys (expected {sorted(snapshot_keys)}, got {sorted(submitted_keys)}).",
+            )
+
+        total_weight = 0
+        for k, v in weights_map.items():
+            if not isinstance(v, int) or isinstance(v, bool) or v < 0 or v > 100:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail=f"Weight for '{k}' must be an integer between 0 and 100 (got {v}).",
+                )
+            total_weight += v
+
+        if total_weight != 100:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"Weights must total exactly 100 (got {total_weight}).",
+            )
+
+        # Updates snapshot weights only; never touches the user's criteria; status unchanged
+        new_snapshot = [
+            {**item, "weight": int(weights_map[item["key"]])}
+            for item in snapshot
+        ]
+        await EvaluationRepository.update_criteria_snapshot(session, eval_obj, new_snapshot)
+        return await EvaluationService.get_results(session, user_id, evaluation_id)
+
+    @staticmethod
     async def get_results(
         session: AsyncSession, user_id: uuid.UUID, evaluation_id: uuid.UUID
     ) -> EvaluationResultsResponse:
@@ -439,9 +598,12 @@ class EvaluationService:
             )
 
         eval_obj: Evaluation = data["evaluation"]
+        company_name: Optional[str] = data.get("company_name")
         if eval_obj.status not in ("analysed", "stale"):
             return EvaluationResultsResponse(
                 status=eval_obj.status,
+                company_name=company_name,
+                criteria_snapshot=eval_obj.criteria_snapshot,
                 vendors=[],
                 findings=[],
                 costs=[],
@@ -531,20 +693,37 @@ class EvaluationService:
                 incomplete=v_res["incomplete"],
             )
 
-        # Map findings with Evidence
-        findings_response = []
+        # Fix: mandatory failures = mandatory requirements with status non_compliant only
+        mandatory_req_map = {r.id: r for r in (eval_obj.requirements or []) if r.mandatory}
+        mandatory_total = len(mandatory_req_map)
+
+        vendor_mandatory_met: Dict[str, int] = {str(v.id): 0 for v in vendors}
         vendor_failures_count: Dict[str, int] = {str(v.id): 0 for v in vendors}
-        vendor_unknown_count: Dict[str, int] = {str(v.id): 0 for v in vendors}
+        vendor_mandatory_not_evidenced: Dict[str, int] = {str(v.id): 0 for v in vendors}
+        vendor_mandatory_needs_review: Dict[str, int] = {str(v.id): 0 for v in vendors}
         vendor_needs_review_count: Dict[str, int] = {str(v.id): 0 for v in vendors}
 
+        # Track which mandatory requirements were evidenced per vendor
+        vendor_seen_mandatory_reqs: Dict[str, set] = {str(v.id): set() for v in vendors}
+
+        findings_response = []
         for f in findings_raw:
             v_id_str = str(f.vendor_id)
-            if f.status == "Non-compliant":
-                vendor_failures_count[v_id_str] = vendor_failures_count.get(v_id_str, 0) + 1
             if f.needs_review:
                 vendor_needs_review_count[v_id_str] = vendor_needs_review_count.get(v_id_str, 0) + 1
-            if "Unknown cost" in (f.risk_types or []):
-                vendor_unknown_count[v_id_str] = vendor_unknown_count.get(v_id_str, 0) + 1
+
+            if f.requirement_id and f.requirement_id in mandatory_req_map:
+                vendor_seen_mandatory_reqs[v_id_str].add(f.requirement_id)
+                status_lower = (f.status or "").strip().lower()
+                if status_lower == "compliant":
+                    vendor_mandatory_met[v_id_str] = vendor_mandatory_met.get(v_id_str, 0) + 1
+                elif status_lower in ("non-compliant", "non_compliant"):
+                    vendor_failures_count[v_id_str] = vendor_failures_count.get(v_id_str, 0) + 1
+                elif status_lower in ("not-evidenced", "not_evidenced", "notevidenced"):
+                    vendor_mandatory_not_evidenced[v_id_str] = vendor_mandatory_not_evidenced.get(v_id_str, 0) + 1
+
+                if f.needs_review:
+                    vendor_mandatory_needs_review[v_id_str] = vendor_mandatory_needs_review.get(v_id_str, 0) + 1
 
             evidence_obj = None
             if f.evidence_quote:
@@ -582,6 +761,15 @@ class EvaluationService:
                 )
             )
 
+        # Any mandatory requirement without a finding for that vendor is also not evidenced
+        for v in vendors:
+            v_id_str = str(v.id)
+            unseen_mand = mandatory_total - len(vendor_seen_mandatory_reqs[v_id_str])
+            if unseen_mand > 0:
+                vendor_mandatory_not_evidenced[v_id_str] = (
+                    vendor_mandatory_not_evidenced.get(v_id_str, 0) + unseen_mand
+                )
+
         # Map costs
         costs_by_vendor: Dict[str, CostBreakdownResponse] = {}
         costs_response = []
@@ -591,9 +779,9 @@ class EvaluationService:
                 id=cb.id,
                 evaluation_id=cb.evaluation_id,
                 vendor_id=cb.vendor_id,
-                monthly_base=float(cb.monthly_base),
-                gst_18=float(cb.gst_18),
-                monthly_total=float(cb.monthly_total),
+                monthly_base=float(cb.monthly_base) if cb.monthly_base is not None else None,
+                gst_18=float(cb.gst_18) if cb.gst_18 is not None else None,
+                monthly_total=float(cb.monthly_total) if cb.monthly_total is not None else None,
                 included=cb.included or [],
                 excluded=cb.excluded or [],
                 optional=cb.optional or [],
@@ -611,33 +799,67 @@ class EvaluationService:
 
         # Build vendor items
         vendor_items = []
+        recommendation_input = []
         for v in vendors:
             v_id_str = str(v.id)
             cost_obj = costs_by_vendor.get(v_id_str)
             tot_res = vendor_totals_map[v_id_str]
-            vendor_items.append(
-                VendorResultItem(
-                    id=v_id_str,
-                    name=v.name,
-                    score=tot_res.total,
-                    raw_score=tot_res.raw_total,
-                    mandatory_failures=vendor_failures_count.get(v_id_str, 0),
-                    monthly_base_inr=cost_obj.monthly_base if cost_obj else 0.0,
-                    gst_rate=0.18,
-                    monthly_gst_inr=cost_obj.gst_18 if cost_obj else 0.0,
-                    monthly_total_inr=cost_obj.monthly_total if cost_obj else 0.0,
-                    unknown_costs_count=len(cost_obj.unknown) if cost_obj else 0,
-                    needs_review_count=vendor_needs_review_count.get(v_id_str, 0),
+            v_crit_scores = {
+                ckey: CriterionScoreCell(
+                    score=vendor_scoring_results[v_id_str]["criteria_scores"].get(ckey, {}).get("score"),
+                    points=vendor_scoring_results[v_id_str]["criteria_scores"].get(ckey, {}).get("points"),
+                    raw_points=vendor_scoring_results[v_id_str]["criteria_scores"].get(ckey, {}).get("raw_points"),
                 )
+                for ckey in [item["key"] for item in snapshot]
+            }
+
+            v_item = VendorResultItem(
+                id=v_id_str,
+                name=v.name,
+                score=tot_res.total,
+                display_total=tot_res.total,
+                raw_score=tot_res.raw_total,
+                exact_total=tot_res.raw_total,
+                mandatory_met=vendor_mandatory_met.get(v_id_str, 0),
+                mandatory_total=mandatory_total,
+                mandatory_failures=vendor_failures_count.get(v_id_str, 0),
+                mandatory_not_evidenced=vendor_mandatory_not_evidenced.get(v_id_str, 0),
+                mandatory_needs_review=vendor_mandatory_needs_review.get(v_id_str, 0),
+                monthly_base_inr=cost_obj.monthly_base if cost_obj else None,
+                gst_rate=0.18,
+                monthly_gst_inr=cost_obj.gst_18 if cost_obj else None,
+                monthly_total_inr=cost_obj.monthly_total if cost_obj else None,
+                unknown_costs_count=len(cost_obj.unknown) if cost_obj else 0,
+                needs_review_count=vendor_needs_review_count.get(v_id_str, 0),
+                criterion_scores=v_crit_scores,
             )
+            vendor_items.append(v_item)
+
+            recommendation_input.append(
+                {
+                    "vendor_id": v_id_str,
+                    "name": v.name,
+                    "exact_total": tot_res.raw_total,
+                    "mandatory_failures": v_item.mandatory_failures,
+                    "mandatory_not_evidenced": v_item.mandatory_not_evidenced,
+                    "mandatory_needs_review": v_item.mandatory_needs_review,
+                }
+            )
+
+        recommendation_obj: Optional[RecommendationResponse] = None
+        if eval_obj.status in ("analysed", "stale") and criterion_scores_raw:
+            rec_dict = compute_recommendation(recommendation_input)
+            recommendation_obj = RecommendationResponse.model_validate(rec_dict)
 
         return EvaluationResultsResponse(
             status=eval_obj.status,
+            company_name=company_name,
+            criteria_snapshot=snapshot,
             vendors=vendor_items,
             findings=findings_response,
             costs=costs_response,
             clarifications=clarifications_map,
             scoring=scoring_rows,
             vendor_totals=vendor_totals_map,
-            recommendation=None,
+            recommendation=recommendation_obj,
         )

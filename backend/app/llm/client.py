@@ -1,20 +1,26 @@
 from abc import ABC, abstractmethod
 import asyncio
+from enum import Enum
+import inspect
 import json
 import logging
 from pathlib import Path
 import time
-from typing import Any, Callable, Dict, List, Optional, Type, TypeVar
+from typing import Any, Callable, Dict, List, Optional, Sequence, Type, TypeVar
 from google import genai
 from google.genai import errors as genai_errors
 from google.genai import types
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, Field, ValidationError, field_validator
 
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
 PROMPTS_DIR = Path(__file__).parent / "prompts"
+
+MAX_REQUIREMENTS_SECTION_CHARS = 30_000
+MAX_CRITERIA_SECTION_CHARS = 15_000
+MAX_PROPOSAL_SECTION_CHARS = 80_000
 
 T = TypeVar("T", bound=BaseModel)
 
@@ -48,6 +54,125 @@ class ExtractedRequirementsEnvelope(BaseModel):
     requirements: List[ExtractedRequirement]
 
 
+class LLMComplianceStatus(str, Enum):
+    COMPLIANT = "compliant"
+    PARTIALLY_COMPLIANT = "partially_compliant"
+    NON_COMPLIANT = "non_compliant"
+    NOT_EVIDENCED = "not_evidenced"
+
+
+class LLMRiskType(str, Enum):
+    EXCLUSION = "exclusion"
+    OMISSION = "omission"
+    AMBIGUITY = "ambiguity"
+    CONTRADICTION = "contradiction"
+    UNKNOWN_COST = "unknown_cost"
+
+
+class LLMSeverity(str, Enum):
+    HIGH = "high"
+    MEDIUM = "medium"
+    LOW = "low"
+
+
+class LLMConfidence(str, Enum):
+    HIGH = "high"
+    MEDIUM = "medium"
+    LOW = "low"
+
+
+def _normalise_enum_token(val: Any) -> Any:
+    if isinstance(val, str):
+        return val.strip().lower().replace("-", "_").replace(" ", "_")
+    return val
+
+
+class ExtractedRequirementFinding(BaseModel):
+    code: str
+    status: LLMComplianceStatus
+    quote: Optional[str] = None
+    page: Optional[int] = None
+    section: Optional[str] = None
+    confidence: LLMConfidence = LLMConfidence.HIGH
+    is_inference: bool = False
+    risk_types: List[LLMRiskType] = Field(default_factory=list)
+    severity: Optional[LLMSeverity] = None
+    clarification_question: Optional[str] = None
+
+    @field_validator("status", "confidence", "severity", mode="before")
+    @classmethod
+    def _norm_single_enums(cls, v: Any) -> Any:
+        return _normalise_enum_token(v)
+
+    @field_validator("risk_types", mode="before")
+    @classmethod
+    def _norm_risk_types(cls, v: Any) -> Any:
+        if isinstance(v, list):
+            return [_normalise_enum_token(item) for item in v]
+        return v
+
+
+class ExtractedCriterionFinding(BaseModel):
+    key: str
+    status: LLMComplianceStatus
+    quote: Optional[str] = None
+    page: Optional[int] = None
+    section: Optional[str] = None
+    rationale: str = ""
+
+    @field_validator("status", mode="before")
+    @classmethod
+    def _norm_status(cls, v: Any) -> Any:
+        return _normalise_enum_token(v)
+
+
+class ExtractedStandaloneRisk(BaseModel):
+    risk_types: List[LLMRiskType] = Field(default_factory=list)
+    severity: LLMSeverity = LLMSeverity.MEDIUM
+    quote: Optional[str] = None
+    page: Optional[int] = None
+    section: Optional[str] = None
+    description: str = ""
+    clarification_question: Optional[str] = None
+
+    @field_validator("severity", mode="before")
+    @classmethod
+    def _norm_severity(cls, v: Any) -> Any:
+        return _normalise_enum_token(v)
+
+    @field_validator("risk_types", mode="before")
+    @classmethod
+    def _norm_risk_types(cls, v: Any) -> Any:
+        if isinstance(v, list):
+            return [_normalise_enum_token(item) for item in v]
+        return v
+
+
+class ExtractedCostItem(BaseModel):
+    item: str
+    quote: Optional[str] = None
+    page: Optional[int] = None
+
+
+class ExtractedCost(BaseModel):
+    monthly_base: Optional[float] = None
+    included: List[ExtractedCostItem] = Field(default_factory=list)
+    excluded: List[ExtractedCostItem] = Field(default_factory=list)
+    optional: List[ExtractedCostItem] = Field(default_factory=list)
+    unknown: List[ExtractedCostItem] = Field(default_factory=list)
+
+
+class VendorAnalysisResult(BaseModel):
+    requirement_findings: List[ExtractedRequirementFinding] = Field(
+        default_factory=list
+    )
+    criterion_findings: List[ExtractedCriterionFinding] = Field(
+        default_factory=list
+    )
+    risks: List[ExtractedStandaloneRisk] = Field(default_factory=list)
+    cost: ExtractedCost = Field(default_factory=ExtractedCost)
+
+
 def build_pdf_to_pages_prompt() -> str:
     prompt_path = PROMPTS_DIR / "extract_pages_v1.txt"
     return prompt_path.read_text(encoding="utf-8").strip()
@@ -64,6 +189,48 @@ def build_extract_requirements_prompt(pages: List[PageText]) -> str:
     return template.replace("{document_text}", document_text)
 
 
+def build_analyse_vendor_prompt(
+    vendor_name: str,
+    requirements: Sequence[Dict[str, Any]],
+    judged_criteria: Sequence[Dict[str, Any]],
+    pages: Sequence[PageText],
+) -> str:
+    prompt_path = PROMPTS_DIR / "analyse_vendor_v1.txt"
+    template = prompt_path.read_text(encoding="utf-8")
+
+    req_lines: List[str] = []
+    for r in requirements:
+        code = r.get("code", "")
+        mand = "true" if r.get("mandatory") else "false"
+        text = r.get("text", "")
+        acc = r.get("acceptance", "")
+        req_lines.append(
+            f"- code: {code} | mandatory: {mand} | requirement: {text} | acceptance: {acc}"
+        )
+    requirements_text = "\n".join(req_lines)[:MAX_REQUIREMENTS_SECTION_CHARS]
+
+    crit_lines: List[str] = []
+    for c in judged_criteria:
+        key = c.get("key", "")
+        name = c.get("name", "")
+        guidance = c.get("guidance", "")
+        crit_lines.append(f"- key: {key} | name: {name} | guidance: {guidance}")
+    criteria_text = "\n".join(crit_lines)[:MAX_CRITERIA_SECTION_CHARS]
+
+    ordered_pages = sorted(pages, key=lambda p: p.page_number)
+    page_sections = [
+        f"--- PAGE {p.page_number} ---\n{p.text}" for p in ordered_pages
+    ]
+    proposal_text = "\n\n".join(page_sections)[:MAX_PROPOSAL_SECTION_CHARS]
+
+    return (
+        template.replace("{vendor_name}", vendor_name)
+        .replace("{requirements_text}", requirements_text)
+        .replace("{criteria_text}", criteria_text)
+        .replace("{proposal_text}", proposal_text)
+    )
+
+
 class GeminiClient(ABC):
     @abstractmethod
     async def pdf_to_pages(self, pdf_bytes: bytes) -> List[PageText]:
@@ -75,6 +242,17 @@ class GeminiClient(ABC):
         self, pages: List[PageText]
     ) -> List[ExtractedRequirement]:
         """Extract structured requirements from ordered document pages."""
+        ...
+
+    @abstractmethod
+    async def analyse_vendor(
+        self,
+        vendor_name: str,
+        requirements: List[Dict[str, Any]],
+        judged_criteria: List[Dict[str, Any]],
+        pages: List[PageText],
+    ) -> VendorAnalysisResult:
+        """Analyse a single vendor proposal against requirements and judged criteria."""
         ...
 
 
@@ -91,7 +269,13 @@ def _is_retryable_Error(exc: BaseException) -> bool:
     exc_name = type(exc).__name__.lower()
     if any(
         k in exc_name
-        for k in ("ratelimit", "resourceexhausted", "servererror", "serviceunavailable", "timeout")
+        for k in (
+            "ratelimit",
+            "resourceexhausted",
+            "servererror",
+            "serviceunavailable",
+            "timeout",
+        )
     ):
         return True
     return False
@@ -167,9 +351,14 @@ class GoogleGenAIClient(GeminiClient):
                     break
                 except Exception as exc:
                     duration_ms = int((time.monotonic() - start_ts) * 1000)
-                    if _is_retryable_Error(exc) and transient_retries < self._max_retries:
+                    if (
+                        _is_retryable_Error(exc)
+                        and transient_retries < self._max_retries
+                    ):
                         transient_retries += 1
-                        delay = self._base_backoff * (2 ** (transient_retries - 1))
+                        delay = self._base_backoff * (
+                            2 ** (transient_retries - 1)
+                        )
                         logger.warning(
                             "Gemini transient error: op=%s error_type=%s retry=%d/%d delay_s=%.2f duration_ms=%d",
                             operation_name,
@@ -200,7 +389,7 @@ class GoogleGenAIClient(GeminiClient):
                 parsed_json = json.loads(raw_text)
                 validated = schema_cls.model_validate(parsed_json)
                 return validated
-            except ( json.JSONDecodeError, ValidationError, ValueError) as val_exc:
+            except (json.JSONDecodeError, ValidationError, ValueError) as val_exc:
                 logger.warning(
                     "Gemini invalid structured output: op=%s attempt=%d/%d error_type=%s",
                     operation_name,
@@ -217,7 +406,9 @@ class GoogleGenAIClient(GeminiClient):
 
     async def pdf_to_pages(self, pdf_bytes: bytes) -> List[PageText]:
         prompt = build_pdf_to_pages_prompt()
-        pdf_part = types.Part.from_bytes(data=pdf_bytes, mime_type="application/pdf")
+        pdf_part = types.Part.from_bytes(
+            data=pdf_bytes, mime_type="application/pdf"
+        )
         envelope = await self._call_with_retries_and_validation(
             operation_name="pdf_to_pages",
             contents=[prompt, pdf_part],
@@ -241,6 +432,32 @@ class GoogleGenAIClient(GeminiClient):
         )
         return envelope.requirements
 
+    async def analyse_vendor(
+        self,
+        vendor_name: str,
+        requirements: List[Dict[str, Any]],
+        judged_criteria: List[Dict[str, Any]],
+        pages: List[PageText],
+    ) -> VendorAnalysisResult:
+        prompt = build_analyse_vendor_prompt(
+            vendor_name=vendor_name,
+            requirements=requirements,
+            judged_criteria=judged_criteria,
+            pages=pages,
+        )
+        result = await self._call_with_retries_and_validation(
+            operation_name="analyse_vendor",
+            contents=[prompt],
+            schema_cls=VendorAnalysisResult,
+        )
+        logger.info(
+            "Analysed vendor proposal: req_findings=%d crit_findings=%d risks=%d",
+            len(result.requirement_findings),
+            len(result.criterion_findings),
+            len(result.risks),
+        )
+        return result
+
 
 class FakeGeminiClient(GeminiClient):
     """Fake Gemini client for deterministic unit testing without live model calls."""
@@ -253,6 +470,9 @@ class FakeGeminiClient(GeminiClient):
         requirements_handler: Optional[
             Callable[[List[PageText]], List[ExtractedRequirement]]
         ] = None,
+        default_analysis: Optional[VendorAnalysisResult] = None,
+        analysis_by_vendor: Optional[Dict[str, VendorAnalysisResult]] = None,
+        analysis_handler: Optional[Callable[..., VendorAnalysisResult]] = None,
         delay_seconds: float = 0.0,
     ) -> None:
         self.default_pages = default_pages or [
@@ -300,9 +520,14 @@ class FakeGeminiClient(GeminiClient):
         )
         self.pdf_handler = pdf_handler
         self.requirements_handler = requirements_handler
+        self.default_analysis = default_analysis
+        self.analysis_by_vendor = analysis_by_vendor or {}
+        self.analysis_handler = analysis_handler
         self.delay_seconds = delay_seconds
         self.pdf_call_count = 0
         self.requirements_call_count = 0
+        self.analysis_call_count = 0
+        self.last_analysis_calls: List[Dict[str, Any]] = []
         self.in_flight = 0
         self.max_in_flight = 0
 
@@ -327,6 +552,99 @@ class FakeGeminiClient(GeminiClient):
         if self.requirements_handler is not None:
             return self.requirements_handler(pages)
         return list(self.default_requirements)
+
+    async def analyse_vendor(
+        self,
+        vendor_name: str,
+        requirements: List[Dict[str, Any]],
+        judged_criteria: List[Dict[str, Any]],
+        pages: List[PageText],
+    ) -> VendorAnalysisResult:
+        self.analysis_call_count += 1
+        self.last_analysis_calls.append(
+            {
+                "vendor_name": vendor_name,
+                "requirements": requirements,
+                "judged_criteria": judged_criteria,
+                "pages": pages,
+            }
+        )
+        self.in_flight += 1
+        if self.in_flight > self.max_in_flight:
+            self.max_in_flight = self.in_flight
+        try:
+            if self.delay_seconds > 0:
+                await asyncio.sleep(self.delay_seconds)
+            if self.analysis_handler is not None:
+                sig = inspect.signature(self.analysis_handler)
+                params = list(sig.parameters.values())
+                has_varargs = any(
+                    p.kind == inspect.Parameter.VAR_POSITIONAL for p in params
+                )
+                if has_varargs or len(params) >= 4:
+                    return self.analysis_handler(
+                        vendor_name, requirements, judged_criteria, pages
+                    )
+                if len(params) == 1:
+                    return self.analysis_handler(vendor_name)
+                return self.analysis_handler(vendor_name, requirements)
+            if vendor_name in self.analysis_by_vendor:
+                return self.analysis_by_vendor[vendor_name]
+            if self.default_analysis is not None:
+                return self.default_analysis
+
+            first_page = pages[0] if pages else PageText(page_number=1, text="")
+            first_line = (
+                first_page.text.splitlines()[0].strip()
+                if first_page.text.strip()
+                else ""
+            )
+            req_findings = [
+                ExtractedRequirementFinding(
+                    code=r["code"],
+                    status=LLMComplianceStatus.COMPLIANT,
+                    quote=first_line or None,
+                    page=first_page.page_number if first_line else None,
+                    section="§1",
+                    confidence=LLMConfidence.HIGH,
+                    is_inference=False,
+                    risk_types=[],
+                    severity=None,
+                    clarification_question=None,
+                )
+                for r in requirements
+            ]
+            crit_findings = [
+                ExtractedCriterionFinding(
+                    key=c["key"],
+                    status=LLMComplianceStatus.COMPLIANT,
+                    quote=first_line or None,
+                    page=first_page.page_number if first_line else None,
+                    section="§1",
+                    rationale="Supported by proposal text.",
+                )
+                for c in judged_criteria
+            ]
+            return VendorAnalysisResult(
+                requirement_findings=req_findings,
+                criterion_findings=crit_findings,
+                risks=[],
+                cost=ExtractedCost(
+                    monthly_base=400000.0,
+                    included=[
+                        ExtractedCostItem(
+                            item="Housekeeping staff",
+                            quote=first_line or None,
+                            page=first_page.page_number if first_line else None,
+                        )
+                    ],
+                    excluded=[],
+                    optional=[],
+                    unknown=[],
+                ),
+            )
+        finally:
+            self.in_flight -= 1
 
 
 GeminiClientFactory = Callable[[], GeminiClient]

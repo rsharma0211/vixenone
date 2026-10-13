@@ -7,6 +7,7 @@ from app.core.auth import AuthenticatedUser, get_current_user
 from app.core.database import get_db
 from app.repositories.evaluation_repo import EvaluationRepository
 from app.schemas.evaluation import (
+    AnalyseEvaluationRequest,
     AnalysisJobResponse,
     DocumentResponse,
     EvaluationCreate,
@@ -257,3 +258,43 @@ async def get_results(
 ) -> EvaluationResultsResponse:
     user = await UserService.get_or_create_profile(db, current_user)
     return await EvaluationService.get_results(db, user.id, id)
+
+
+@router.post(
+    "/{id}/analyse",
+    response_model=AnalysisJobResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def analyse_evaluation(
+    id: uuid.UUID,
+    payload: Optional[AnalyseEvaluationRequest] = Body(default=None),
+    current_user: AuthenticatedUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    launcher: JobLauncher = Depends(get_job_launcher),
+) -> AnalysisJobResponse:
+    user = await UserService.get_or_create_profile(db, current_user)
+    confirm_rerun = payload.confirm_rerun if payload is not None else False
+    return await EvaluationService.start_analysis(
+        session=db,
+        user_id=user.id,
+        evaluation_id=id,
+        confirm_rerun=confirm_rerun,
+        launcher=launcher,
+    )
+
+
+@router.put("/{id}/weights", response_model=EvaluationResultsResponse)
+async def update_weights(
+    id: uuid.UUID,
+    payload: Dict[str, int] = Body(...),
+    current_user: AuthenticatedUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> EvaluationResultsResponse:
+    user = await UserService.get_or_create_profile(db, current_user)
+    return await EvaluationService.update_weights(
+        session=db,
+        user_id=user.id,
+        evaluation_id=id,
+        payload=payload,
+    )
+

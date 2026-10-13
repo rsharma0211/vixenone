@@ -386,6 +386,7 @@ class Finding(Base):
     criterion_key: Mapped[Optional[str]] = mapped_column(
         String(100),
         nullable=True,
+        index=True,
     )
     status: Mapped[str] = mapped_column(
         String(30),
@@ -517,17 +518,17 @@ class CostBreakdown(Base):
         nullable=False,
         index=True,
     )
-    monthly_base: Mapped[float] = mapped_column(
+    monthly_base: Mapped[Optional[float]] = mapped_column(
         Numeric(12, 2),
-        nullable=False,
+        nullable=True,
     )
-    gst_18: Mapped[float] = mapped_column(
+    gst_18: Mapped[Optional[float]] = mapped_column(
         Numeric(12, 2),
-        nullable=False,
+        nullable=True,
     )
-    monthly_total: Mapped[float] = mapped_column(
+    monthly_total: Mapped[Optional[float]] = mapped_column(
         Numeric(12, 2),
-        nullable=False,
+        nullable=True,
     )
     included: Mapped[List[str]] = mapped_column(
         JSONB,

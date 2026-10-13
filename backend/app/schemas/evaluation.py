@@ -136,6 +136,10 @@ class ExtractRequirementsRequest(BaseModel):
     confirm_replace: bool = False
 
 
+class AnalyseEvaluationRequest(BaseModel):
+    confirm_rerun: bool = False
+
+
 # --- Response models ---
 
 class VendorResponse(BaseModel):
@@ -315,9 +319,9 @@ class CostBreakdownResponse(BaseModel):
     id: uuid.UUID
     evaluation_id: uuid.UUID
     vendor_id: uuid.UUID
-    monthly_base: float
-    gst_18: float
-    monthly_total: float
+    monthly_base: Optional[float] = None
+    gst_18: Optional[float] = None
+    monthly_total: Optional[float] = None
     included: List[str]
     excluded: List[str]
     optional: List[str]
@@ -364,22 +368,37 @@ class VendorResultItem(BaseModel):
     name: str
     tag: Optional[str] = None
     score: Optional[int] = None  # display
+    display_total: Optional[int] = None  # display alias
     raw_score: Optional[float] = None  # exact
-    mandatory_failures: int
-    monthly_base_inr: float
-    gst_rate: float
-    monthly_gst_inr: float
-    monthly_total_inr: float
-    unknown_costs_count: int
-    needs_review_count: int
+    exact_total: Optional[float] = None  # exact alias
+    mandatory_met: int = 0
+    mandatory_total: int = 0
+    mandatory_failures: int = 0
+    mandatory_not_evidenced: int = 0
+    mandatory_needs_review: int = 0
+    monthly_base_inr: Optional[float] = None
+    gst_rate: float = 0.18
+    monthly_gst_inr: Optional[float] = None
+    monthly_total_inr: Optional[float] = None
+    unknown_costs_count: int = 0
+    needs_review_count: int = 0
+    criterion_scores: Dict[str, CriterionScoreCell] = Field(default_factory=dict)
+
+
+class RecommendationResponse(BaseModel):
+    state: str  # recommended | insufficient
+    vendor_id: Optional[str] = None
+    reasons: List[str] = Field(default_factory=list)
 
 
 class EvaluationResultsResponse(BaseModel):
     status: str
+    company_name: Optional[str] = None
+    criteria_snapshot: Optional[List[Dict[str, Any]]] = None
     vendors: List[VendorResultItem]
     findings: List[FindingResponse]
     costs: List[CostBreakdownResponse]
     clarifications: Dict[str, List[str]]
     scoring: List[CriterionScoreRow]
     vendor_totals: Dict[str, VendorTotalResult]
-    recommendation: Optional[Dict[str, Any]] = None
+    recommendation: Optional[RecommendationResponse] = None
