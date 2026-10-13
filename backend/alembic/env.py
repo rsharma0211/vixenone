@@ -7,6 +7,8 @@ from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from app.core.config import settings
+import configparser
+
 from app.core.database import Base
 from app.models.user import User
 
@@ -17,7 +19,15 @@ if config.config_file_name is not None:
 
 target_metadata = Base.metadata
 
-config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
+# Ensure migration config does not treat % as a template/interpolation character
+# (e.g. for percent-encoded passwords containing %3B, %3E, %28 in DATABASE_URL)
+if hasattr(config, "file_config"):
+    config.file_config._interpolation = configparser.Interpolation()
+
+try:
+    config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
+except ValueError:
+    config.set_main_option("sqlalchemy.url", settings.DATABASE_URL.replace("%", "%%"))
 
 
 def run_migrations_offline() -> None:

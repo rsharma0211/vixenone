@@ -1,12 +1,13 @@
-import asyncio
 import logging
-from typing import Optional
-from sqlalchemy import select
+from typing import Any
+
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth import AuthenticatedUser, init_firebase
 from app.core.config import settings
 from app.core.database import async_session
+from app.models.company import Company
 from app.models.user import User
 from app.schemas.user import UserProfileUpdate, UserRole
 from app.services.seed_demo import DEMO_EMAIL, seed_demo_data
@@ -19,8 +20,8 @@ DEMO_DISPLAY_NAME = "Priya Sharma"
 
 
 async def run_seed(
-    session: Optional[AsyncSession] = None,
-    auth_admin: Optional[object] = None,
+    session: AsyncSession | None = None,
+    auth_admin: Any | None = None,
 ) -> User:
     """Run idempotent seed:
     1. Look up demo@vixenone.app in Firebase; if missing, create it.
@@ -28,6 +29,7 @@ async def run_seed(
     3. Run existing company, locations, criteria and demo-data seed for that user.
     """
     # 1. Firebase Admin lookup/create
+    auth_client: Any
     if auth_admin is not None:
         auth_client = auth_admin
     else:
@@ -84,8 +86,6 @@ async def run_seed(
                 await session.delete(extra)
             await session.flush()
             if extra_company_ids:
-                from app.models.company import Company
-                from sqlalchemy import delete
                 await session.execute(delete(Company).where(Company.id.in_(extra_company_ids)))
             await session.commit()
             await session.refresh(user)

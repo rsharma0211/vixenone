@@ -1,7 +1,7 @@
-from typing import Any, Dict, Optional
+from typing import Any
 
 
-def get_startup_config(env: Optional[str] = None, port: Optional[Any] = None) -> Dict[str, Any]:
+def get_startup_config(env: str | None = None, port: Any | None = None) -> dict[str, Any]:
     """Determine runtime startup parameters and commands based on environment mode.
 
     - Production: no migrations, no reload, single worker process (1), listen on Cloud Run port (fallback 8000).

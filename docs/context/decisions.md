@@ -63,6 +63,7 @@ Append-only record of architectural and implementation decisions. Format: `YYYY-
 - 2026-10-13 — CloudStorageService using official Google Cloud Storage SDK and ADC — Implement swappable GCS storage adapter with private object storage and off-event-loop calls via `asyncio.to_thread`, matching LocalStorageService missing-file semantics.
 - 2026-10-13 — Global Cache-Control: no-store header on all API responses — Attach `Cache-Control: no-store` across all API responses via `NoCacheMiddleware` to prevent stale polling steps behind CDNs and intermediate proxies.
 - 2026-10-13 — Firebase Hosting same-origin routing plan — Firebase Hosting rewrites `/api/**` to the Cloud Run `api` service so frontend and API share the same origin, eliminating CORS in production.
+- 2026-10-13 — Alembic interpolation bypass for percent-encoded database URLs and Makefile closeout targets — Disable configparser template interpolation on Alembic file_config to safely support database URLs with percent-encoded password characters (e.g. %3B, %3E, %28), and add explicit Makefile lint-api, type-check-api, and prepare targets.
 
 
 

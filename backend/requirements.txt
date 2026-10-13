@@ -15,3 +15,5 @@ python-docx==1.1.2
 python-multipart==0.0.12
 google-genai==1.47.0
 google-cloud-storage==2.18.2
+ruff==0.17.0
+mypy==2.4.0

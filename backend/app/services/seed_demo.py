@@ -1,5 +1,4 @@
 from datetime import datetime, timezone
-from decimal import Decimal
 from typing import Optional
 import uuid
 from sqlalchemy import delete, func, select
@@ -7,7 +6,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import async_session
 from app.models.company import Company, Location
-from app.models.criteria import EvaluationCriterion
 from app.models.evaluation import (
     AnalysisJob,
     Clarification,
@@ -22,7 +20,7 @@ from app.models.evaluation import (
 from app.models.user import User
 from app.repositories.company_repo import CompanyRepository
 from app.repositories.criteria_repo import CriteriaRepository
-from app.schemas.criteria import BUILTIN_CRITERIA_DEFAULTS, CriterionKind
+from app.schemas.criteria import BUILTIN_CRITERIA_DEFAULTS
 
 DEMO_EMAIL = "demo@vixenone.app"
 DEMO_COMPANY_NAME = "Northbridge Properties Pvt Ltd"
@@ -89,10 +87,6 @@ async def seed_demo_data(session: Optional[AsyncSession] = None) -> None:
 
         loc_by_name = {}
         for loc_name, loc_city, pos in DEMO_LOCATIONS:
-            loc_stmt = select(Location).where(
-                Location.company_id == company.id,
-                func.lower(Location.name) == loc_name.lower(),
-            )
             loc_id = uuid.uuid5(uuid.NAMESPACE_DNS, f"vixenone.location.{loc_name.lower()}")
             loc_by_id_stmt = select(Location).where(Location.id == loc_id)
             loc_by_id = (await session.execute(loc_by_id_stmt)).scalar_one_or_none()
@@ -324,7 +318,7 @@ async def seed_demo_data(session: Optional[AsyncSession] = None) -> None:
             (req_map["REQ-08"], v_urbankleen, "Compliant", False, False, "High", "All deployed personnel are police-verified with active PF and ESIC registrations.", doc_urbankleen, 6, "§5.1 Statutory Obligations", [], None, None),
         ]
 
-        for req_obj, vendor_obj, stat, n_rev, is_inf, conf, qte, doc_obj, pg, sec, risks, sev, clarif_q in findings_data:
+        for req_obj, vendor_obj, stat, n_rev, is_inf, conf, qte, doc_obj, pg, ev_sec, risks, sev, clarif_q in findings_data:
             finding = Finding(
                 id=uuid.uuid4(),
                 evaluation_id=eval_1.id,
@@ -338,7 +332,7 @@ async def seed_demo_data(session: Optional[AsyncSession] = None) -> None:
                 evidence_quote=qte,
                 evidence_document_id=doc_obj.id if doc_obj else None,
                 evidence_page=pg,
-                evidence_section=sec,
+                evidence_section=ev_sec,
                 risk_types=risks,
                 severity=sev,
                 clarification_question=clarif_q,

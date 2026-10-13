@@ -1,6 +1,7 @@
-from contextlib import asynccontextmanager
 import logging
-from fastapi import Depends, FastAPI
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.requests import Request
@@ -24,7 +25,7 @@ async def lifespan(app: FastAPI):
     init_firebase(settings)
     try:
         await recover_interrupted_jobs(async_session)
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
         logger.warning("Startup job recovery skipped: error_type=%s", type(exc).__name__)
     yield
 

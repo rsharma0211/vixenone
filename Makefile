@@ -1,4 +1,4 @@
-.PHONY: help up down logs seed reset migrate db-shell test types lint
+.PHONY: help up down logs seed prepare reset migrate db-shell test types lint lint-api type-check type-check-api
 
 help:
 	@echo "Available commands:"
@@ -30,6 +30,13 @@ seed:
 		docker compose run --rm -T api python -m app.cli.seed; \
 	fi
 
+prepare:
+	@if docker compose ps --services --filter "status=running" | grep -q "^api$$"; then \
+		docker compose exec -T api python -m app.cli.prepare; \
+	else \
+		docker compose run --rm -T api prepare; \
+	fi
+
 reset:
 	docker compose down -v
 	rm -rf emulator-data uploads
@@ -52,5 +59,20 @@ test:
 types:
 	docker compose exec -T web npx --no-install openapi-typescript http://api:8000/api/openapi.json -o src/lib/types/schema.ts
 
-lint:
-	@echo "Linting backend and frontend..."
+lint: lint-api
+
+lint-api:
+	@if docker compose ps --services --filter "status=running" | grep -q "^api$$"; then \
+		docker compose exec -T api ruff check app tests; \
+	else \
+		docker compose run --rm -T api ruff check app tests; \
+	fi
+
+type-check: type-check-api
+
+type-check-api:
+	@if docker compose ps --services --filter "status=running" | grep -q "^api$$"; then \
+		docker compose exec -T api mypy app; \
+	else \
+		docker compose run --rm -T api mypy app; \
+	fi

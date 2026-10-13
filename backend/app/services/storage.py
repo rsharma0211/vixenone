@@ -1,7 +1,7 @@
+import asyncio
 from abc import ABC, abstractmethod
-import os
 from pathlib import Path
-from typing import Optional
+
 import aiofiles
 import aiofiles.os
 
@@ -12,22 +12,18 @@ class StorageService(ABC):
     @abstractmethod
     async def save(self, path: str, content: bytes) -> str:
         """Save content to the specified path and return the relative path/key."""
-        pass
 
     @abstractmethod
     async def read(self, path: str) -> bytes:
         """Read content from the specified path."""
-        pass
 
     @abstractmethod
     async def delete(self, path: str) -> bool:
         """Delete content at the specified path. Return True if deleted, False if not found."""
-        pass
 
     @abstractmethod
     async def exists(self, path: str) -> bool:
         """Check if file exists at the specified path."""
-        pass
 
 
 class LocalStorageService(StorageService):
@@ -69,7 +65,7 @@ class LocalStorageService(StorageService):
 
 
 class CloudStorageService(StorageService):
-    def __init__(self, bucket_name: str, client: Optional[object] = None):
+    def __init__(self, bucket_name: str, client: object | None = None):
         if not bucket_name or not str(bucket_name).strip():
             raise ValueError("Bucket name is required for Cloud Storage")
         self.bucket_name = str(bucket_name).strip()
@@ -129,19 +125,15 @@ class CloudStorageService(StorageService):
         return bool(blob.exists())
 
     async def save(self, path: str, content: bytes) -> str:
-        import asyncio
         return await asyncio.to_thread(self._sync_save, path, content)
 
     async def read(self, path: str) -> bytes:
-        import asyncio
         return await asyncio.to_thread(self._sync_read, path)
 
     async def delete(self, path: str) -> bool:
-        import asyncio
         return await asyncio.to_thread(self._sync_delete, path)
 
     async def exists(self, path: str) -> bool:
-        import asyncio
         return await asyncio.to_thread(self._sync_exists, path)
 
 

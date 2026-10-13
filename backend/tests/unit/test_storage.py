@@ -1,9 +1,9 @@
-import pytest
 import shutil
 from pathlib import Path
 from unittest.mock import patch
 
-from app.core.config import Settings
+import pytest
+
 from app.services.storage import CloudStorageService, LocalStorageService, get_storage
 
 TEST_DIR = Path("/tmp/vixenone_test_uploads")
@@ -47,7 +47,7 @@ class FakeBlob:
 class FakeBucket:
     def __init__(self, name: str):
         self.name = name
-        self.objects = {}
+        self.objects: dict[str, bytes] = {}
 
     def blob(self, name: str) -> FakeBlob:
         return FakeBlob(name, self)
@@ -55,7 +55,7 @@ class FakeBucket:
 
 class FakeStorageClient:
     def __init__(self):
-        self.buckets = {}
+        self.buckets: dict[str, FakeBucket] = {}
 
     def bucket(self, name: str) -> FakeBucket:
         if name not in self.buckets:
@@ -158,11 +158,11 @@ def test_storage_factory_selection():
     # Cloud backend missing bucket name raises ValueError
     with patch("app.services.storage.settings.STORAGE_BACKEND", "cloud"), \
          patch("app.services.storage.settings.STORAGE_BUCKET_NAME", None), \
-         patch("app.services.storage.settings.GCS_BUCKET_NAME", None):
-        with pytest.raises(ValueError, match="STORAGE_BUCKET_NAME"):
-            get_storage()
+         patch("app.services.storage.settings.GCS_BUCKET_NAME", None), \
+         pytest.raises(ValueError, match="STORAGE_BUCKET_NAME"):
+        get_storage()
 
     # Unknown backend raises ValueError
-    with patch("app.services.storage.settings.STORAGE_BACKEND", "aws_s3"):
-        with pytest.raises(ValueError, match="Unsupported storage backend: aws_s3"):
-            get_storage()
+    with patch("app.services.storage.settings.STORAGE_BACKEND", "aws_s3"), \
+         pytest.raises(ValueError, match="Unsupported storage backend: aws_s3"):
+        get_storage()
