@@ -27,6 +27,8 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { LifecycleStatus } from '@/components/status/LifecycleStatus';
+import { KpiTile } from '@/components/KpiTile';
+import { KPI_HELP_TEXT } from '@/lib/kpiHelp';
 import type {
   EvaluationsListResponse,
   EvaluationSummaryResponse,
@@ -294,33 +296,34 @@ export const EvaluationsListPage: React.FC = () => {
 
       {/* 4 KPI Tiles */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        {[
-          { id: 'total', label: 'Evaluations', value: kpis.total },
-          { id: 'needs_action', label: 'Needs action', value: kpis.needs_action },
-          { id: 'analysed', label: 'Analysed', value: kpis.analysed },
-          { id: 'open_clarifications', label: 'Open clarifications', value: kpis.open_clarifications },
-        ].map((tile) => {
-          const isTileActive = activeKpiTile === tile.id;
-          return (
-            <button
-              key={tile.id}
-              type="button"
-              onClick={() => handleTileClick(tile.id as KpiFilter)}
-              className={`rounded-lg border p-4 text-left transition-all ${
-                isTileActive
-                  ? 'border-navy ring-2 ring-navy bg-surface shadow-sm'
-                  : 'border-border bg-background hover:bg-surface/50'
-              }`}
-            >
-              <div className="text-xs font-medium text-muted uppercase tracking-wider">
-                {tile.label}
-              </div>
-              <div className="text-2xl sm:text-3xl font-bold text-navy mt-1 tracking-tight">
-                {tile.value}
-              </div>
-            </button>
-          );
-        })}
+        <KpiTile
+          label="Evaluations"
+          value={kpis.total}
+          helpText={KPI_HELP_TEXT.evaluations_total}
+          active={activeKpiTile === 'total'}
+          onClick={() => handleTileClick('total')}
+        />
+        <KpiTile
+          label="Needs action"
+          value={kpis.needs_action}
+          helpText={KPI_HELP_TEXT.needs_action}
+          active={activeKpiTile === 'needs_action'}
+          onClick={() => handleTileClick('needs_action')}
+        />
+        <KpiTile
+          label="Analysed"
+          value={kpis.analysed}
+          helpText={KPI_HELP_TEXT.analysed}
+          active={activeKpiTile === 'analysed'}
+          onClick={() => handleTileClick('analysed')}
+        />
+        <KpiTile
+          label="Open clarifications"
+          value={kpis.open_clarifications}
+          helpText={KPI_HELP_TEXT.open_clarifications}
+          active={activeKpiTile === 'open_clarifications'}
+          onClick={() => handleTileClick('open_clarifications')}
+        />
       </div>
 
       {/* Toolbar */}
