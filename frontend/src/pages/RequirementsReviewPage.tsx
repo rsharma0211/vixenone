@@ -28,6 +28,7 @@ import type { EvaluationLayoutContext } from '@/components/layout/EvaluationLayo
 import type {
   RequirementItem,
   RequirementOrigin,
+  AnalysisJobResponse,
 } from '@/lib/types';
 
 // Screen: S4 (Requirements review)
@@ -178,6 +179,15 @@ export const RequirementsReviewPage: React.FC = () => {
   const [serverErrors, setServerErrors] = useState<Record<string, string>>({});
   const [showRerunDialog, setShowRerunDialog] = useState<boolean>(false);
   const [rowToDelete, setRowToDelete] = useState<{ localId: string; code: string } | null>(null);
+
+  // Analysis state
+  const [latestJob, setLatestJob] = useState<AnalysisJobResponse | null>(
+    evaluation?.latest_job ?? null
+  );
+  const [startingAnalysis, setStartingAnalysis] = useState<boolean>(false);
+  const [analyseError, setAnalyseError] = useState<string | null>(null);
+  const [showRerunAnalysisDialog, setShowRerunAnalysisDialog] = useState<boolean>(false);
+  const [hasResults, setHasResults] = useState<boolean>(false);
 
   const nextLocalIdCounter = useRef<number>(1);
 
@@ -513,6 +523,121 @@ export const RequirementsReviewPage: React.FC = () => {
     await executeRerunExtraction();
   };
 
+  useEffect(() => {
+    if (evaluation?.latest_job !== undefined) {
+      setLatestJob(evaluation.latest_job);
+    }
+  }, [evaluation?.latest_job]);
+
+  useEffect(() => {
+    let active = true;
+    if (!evaluationId) return;
+    apiClient
+      .getResults(evaluationId)
+      .then((res) => {
+        if (!active) return;
+        const exists = Boolean(
+          res.vendors &&
+          res.vendors.length > 0 &&
+          (res.findings?.length > 0 || res.costs?.length > 0)
+        );
+        setHasResults(exists);
+      })
+      .catch(() => {
+        if (active) setHasResults(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [evaluationId]);
+
+  const jobActive = Boolean(
+    latestJob &&
+    (latestJob.status === 'queued' ||
+      latestJob.status === 'analysing' ||
+      latestJob.status === 'extracting')
+  );
+
+  // Poll jobs/latest every 2s while a job is active
+  useEffect(() => {
+    if (!evaluationId || !jobActive) return;
+    let cancelled = false;
+
+    const intervalId = window.setInterval(async () => {
+      try {
+        const job = await apiClient.getLatestJob(evaluationId);
+        if (cancelled) return;
+        setLatestJob(job);
+
+        if (!job || job.status === 'done' || job.status === 'failed') {
+          window.clearInterval(intervalId);
+          await outletContext?.refresh();
+          if (!cancelled && job?.status === 'done') {
+            navigate(`/evaluations/${evaluationId}/comparison`);
+          }
+        }
+      } catch {
+        // Keep polling on transient errors
+      }
+    }, 2000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+    };
+  }, [evaluationId, jobActive, navigate, outletContext]);
+
+  const startAnalysis = async (confirmRerun: boolean) => {
+    if (!evaluationId) return;
+    try {
+      setStartingAnalysis(true);
+      setAnalyseError(null);
+      setErrorBanner(null);
+
+      const job = await apiClient.analyseEvaluation(evaluationId, {
+        confirm_rerun: confirmRerun,
+      });
+      setLatestJob(job);
+      setHasResults(true);
+      await outletContext?.refresh();
+
+      if (job.status === 'done') {
+        navigate(`/evaluations/${evaluationId}/comparison`);
+      }
+    } catch (err: unknown) {
+      if (err instanceof ApiValidationError) {
+        setAnalyseError(err.message);
+      } else if (err instanceof ApiHttpError) {
+        const lower = err.message.toLowerCase();
+        if (
+          err.status === 409 &&
+          (lower.includes('confirm_rerun') || lower.includes('already analysed'))
+        ) {
+          setShowRerunAnalysisDialog(true);
+        } else {
+          setAnalyseError(err.message);
+        }
+      } else if (err instanceof Error) {
+        setAnalyseError(err.message);
+      } else {
+        setAnalyseError('Failed to start analysis');
+      }
+    } finally {
+      setStartingAnalysis(false);
+    }
+  };
+
+  const handleClickRunAnalysis = () => {
+    if (jobActive || startingAnalysis || isDirty) return;
+    const isAnalysedOrStale =
+      evaluation?.status === 'analysed' || evaluation?.status === 'stale';
+    if (isAnalysedOrStale && hasResults) {
+      setShowRerunAnalysisDialog(true);
+      return;
+    }
+    startAnalysis(false);
+  };
+
   if (loading && !hasLoaded && rows.length === 0) {
     return (
       <div className="rounded-lg border border-border bg-background p-12 text-center text-muted text-sm">
@@ -632,25 +757,69 @@ export const RequirementsReviewPage: React.FC = () => {
               {saving ? 'Saving...' : 'Save changes'}
             </Button>
 
-            {/* Disabled Run Analysis Primary Action with Tooltip */}
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <div className="relative group inline-block">
+            {/* Run Analysis Action */}
+            <div className="flex flex-col items-end">
+              <div className="flex items-center gap-2">
+                {jobActive && (
+                  <div className="flex items-center gap-1.5 text-xs text-muted">
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin text-accent" />
+                    <span>{latestJob?.step_label || 'Analysing...'}</span>
+                  </div>
+                )}
+                {isDirty ? (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span tabIndex={0} className="inline-block">
+                        <Button
+                          variant="primary"
+                          size="sm"
+                          disabled={true}
+                          className="gap-1.5 font-semibold"
+                        >
+                          <span>Run analysis</span>
+                        </Button>
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent>Save your changes first</TooltipContent>
+                  </Tooltip>
+                ) : (
                   <Button
                     variant="primary"
                     size="sm"
-                    disabled={true}
+                    disabled={jobActive || startingAnalysis || saving || rerunning}
+                    onClick={handleClickRunAnalysis}
                     className="gap-1.5 font-semibold"
                   >
                     <span>Run analysis</span>
                   </Button>
-                  <div className="absolute bottom-full right-0 mb-2 hidden group-hover:block whitespace-nowrap rounded-md bg-navy text-white text-xs px-2.5 py-1 shadow-md pointer-events-none z-50">
-                    Analysis arrives in the next phase
-                  </div>
+                )}
+              </div>
+              {analyseError && (
+                <p className="text-xs text-status-noncompliant-text mt-1 text-right">
+                  {analyseError}
+                </p>
+              )}
+              {latestJob?.status === 'failed' && !jobActive && (
+                <div className="flex items-center gap-2 text-xs text-status-noncompliant-text mt-1">
+                  <span>{latestJob.error_message || 'Analysis failed.'}</span>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() =>
+                      startAnalysis(
+                        hasResults ||
+                          evaluation?.status === 'analysed' ||
+                          evaluation?.status === 'stale'
+                      )
+                    }
+                    className="h-6 px-2 text-xs text-text"
+                  >
+                    Try again
+                  </Button>
                 </div>
-              </TooltipTrigger>
-              <TooltipContent>Analysis arrives in the next phase</TooltipContent>
-            </Tooltip>
+              )}
+            </div>
           </div>
         </div>
 
@@ -968,6 +1137,21 @@ export const RequirementsReviewPage: React.FC = () => {
             setRowToDelete(null);
           }}
           onCancel={() => setRowToDelete(null)}
+        />
+
+        {/* Re-run analysis: shared confirmation dialog */}
+        <ConfirmDialog
+          open={showRerunAnalysisDialog}
+          title="Re-run analysis?"
+          description="Current results will be replaced. Answered clarifications will be reset."
+          confirmLabel="Re-run analysis"
+          destructive={true}
+          busy={startingAnalysis}
+          onConfirm={async () => {
+            setShowRerunAnalysisDialog(false);
+            await startAnalysis(true);
+          }}
+          onCancel={() => setShowRerunAnalysisDialog(false)}
         />
 
         {/* Unsaved changes: in-app navigation blocker dialog */}

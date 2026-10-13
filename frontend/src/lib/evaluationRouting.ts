@@ -17,6 +17,9 @@ export function getEvaluationEntryPath(ev: {
   status: EvaluationStatus;
   latest_job?: AnalysisJobResponse | null;
 }): string {
+  if (ev.status === 'analysed') {
+    return `/evaluations/${ev.id}/comparison`;
+  }
   if (ev.status === 'draft' || isJobActive(ev.latest_job)) {
     return `/evaluations/${ev.id}/documents`;
   }

@@ -491,6 +491,32 @@ class ApiClient {
     return this.handleResponse<AnalysisJobResponse>(response);
   }
 
+  async analyseEvaluation(
+    evaluationId: string,
+    payload?: { confirm_rerun?: boolean }
+  ): Promise<AnalysisJobResponse> {
+    const headers = await this.getAuthHeader();
+    const response = await fetch(
+      `${BASE_URL}/api/evaluations/${evaluationId}/analyse`,
+      payload !== undefined
+        ? {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              ...headers,
+            },
+            body: JSON.stringify(payload),
+          }
+        : {
+            method: 'POST',
+            headers: {
+              ...headers,
+            },
+          }
+    );
+    return this.handleResponse<AnalysisJobResponse>(response);
+  }
+
   // --- Latest Job ---
   async getLatestJob(evaluationId: string): Promise<AnalysisJobResponse | null> {
     const headers = await this.getAuthHeader();

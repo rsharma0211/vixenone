@@ -12,6 +12,7 @@ import { DocumentsPage } from '@/pages/DocumentsPage';
 import { SettingsPage } from '@/pages/SettingsPage';
 import { ProfilePage } from '@/pages/ProfilePage';
 import { RequirementsReviewPage } from '@/pages/RequirementsReviewPage';
+import { ComparisonPage } from '@/pages/ComparisonPage';
 import { EvaluationTabPlaceholder } from '@/pages/EvaluationTabPlaceholder';
 
 const router = createBrowserRouter([
@@ -77,7 +78,7 @@ const router = createBrowserRouter([
           },
           {
             path: 'comparison',
-            element: <EvaluationTabPlaceholder />,
+            element: <ComparisonPage />,
           },
           {
             path: 'recommendation',

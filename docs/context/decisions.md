@@ -53,4 +53,6 @@ Append-only record of architectural and implementation decisions. Format: `YYYY-
 - 2026-10-13 — Nullable cost breakdown columns in migration 0006 and exact GST math — Support unstated base costs with null GST/total and append "Monthly base price not stated" to unknown costs, preventing hallucinated pricing.
 - 2026-10-13 — Explicit recommendation rule with explanatory plain-English reasons — Recommends top eligible vendor only when free of mandatory unevidenced or needs-review findings, without ties, and >=2 vendors analysed; otherwise returns `insufficient` with clear reasons.
 - 2026-10-13 — PUT /api/evaluations/{id}/weights updates snapshot weights only — Allow per-evaluation weight tuning (validating exact snapshot keys and sum=100) and recomputing totals dynamically on read without touching the user's criteria.
+- 2026-10-13 — Phase 4 frontend: Run analysis, Comparison screen, and Finding Detail Drawer — Enabled Run analysis on Requirements tab with unsaved-changes tooltip guard, inline API errors, and re-run confirmation; implemented Vendor Comparison screen with central KPI tiles, grouped compliance matrix, standalone risks, cost comparison, read-only clarifications, and horizontal container scroll; implemented right-side FindingDetailDrawer with blockquote evidence and automatic focus return.
+
 
