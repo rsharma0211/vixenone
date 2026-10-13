@@ -42,10 +42,11 @@ The local development stack consists of four Docker containers on a shared bridg
    - Python 3.12-slim, FastAPI, Uvicorn with `--reload`.
    - Listens on `8000`.
    - Data layer: SQLAlchemy 2 (async engine via `psycopg` 3) with shared session provider.
-   - Migrations: Alembic migrations (`0001_baseline`, `0002_create_users_table`, `0003_criteria_evaluations`, `0004_document_pages`), applied automatically on container startup.
-   - User Profile Model: `User` model with UUID primary key, unique `firebase_uid`, `email`, `display_name`, `role` (`user_role` enum: `facilities_manager`, `procurement`, `approver`), timestamps.
+   - Migrations: Alembic migrations (`0001_baseline`, `0002_create_users_table`, `0003_criteria_evaluations`, `0004_document_pages`, `0005_companies_locations`), applied automatically on container startup.
+   - Company & Location Models: `Company` (`id`, nullable `name` <= 120 chars, timestamps) and `Location` (`id`, `company_id` FK `companies.id` `ON DELETE CASCADE`, `name` 1–80 chars, `city` 1–80 chars, `position`, timestamps, unique `(company_id, lower(name))`). Every user belongs to a company (`users.company_id` NOT NULL FK `companies.id`; backfilled one company per existing user in `0005`, team-ready shape allowing multiple users per company later).
+   - User Profile Model: `User` model with UUID primary key, `company_id` (FK `companies.id`), unique `firebase_uid`, `email`, `display_name`, `role` (`user_role` enum: `facilities_manager`, `procurement`, `approver`), timestamps. Creating a profile on `/api/me` or `/api/company` concurrency-safely creates and links a company (`name = null`).
    - Evaluation Criteria Model: `EvaluationCriterion` with UUID primary key, `user_id` (fk users), `kind` (builtin/custom), `builtin_key`, `name`, `guidance`, `weight` (0–100), `position`. Read-or-create on GET /api/criteria for 5 built-in items; atomic PUT with 422 validations.
-   - Evaluation Models: `Evaluation`, `Vendor`, `Document`, `DocumentPage` (unique `(document_id, page_number)` with cascade delete), `Requirement`, `AnalysisJob`, `Finding`, `CriterionScore`, `CostBreakdown`, `Clarification` all scoped to authenticated user with cascade delete.
+   - Evaluation Models: `Evaluation` (with nullable `location_id` FK `locations.id` `ON DELETE RESTRICT`), `Vendor`, `Document`, `DocumentPage` (unique `(document_id, page_number)` with cascade delete), `Requirement`, `AnalysisJob`, `Finding`, `CriterionScore`, `CostBreakdown`, `Clarification` all scoped to authenticated user with cascade delete.
    - Scoring Engine: Pure Python functions in `app/services/scoring.py` computing points and totals dynamically using exact `Decimal` arithmetic. Round half-up applied strictly for display: points to 1 decimal, totals to whole numbers. Stored data holds only raw criterion scores; points and totals are never stored.
    - Document Validator & Ingestion: Byte signature checking (`%PDF-` with `pdfplumber` page counting <= 30 pages; DOCX ZIP archive containing `word/document.xml`). Local DOCX conversion (`app/services/ingestion.py`) reads body elements in reading order (`## <heading>` for headings, ` | ` joined cells for tables) into a single `page_number = 1`.
    - Auth layer: Firebase Admin SDK validating Bearer tokens; environment-driven initialization (emulator mode when FIREBASE_AUTH_EMULATOR_HOST is set, Application Default Credentials ADC when absent; fails fast in production if emulator is set).
@@ -59,12 +60,17 @@ The local development stack consists of four Docker containers on a shared bridg
    - Storage layer: Swappable storage interface (`StorageService`) with local disk implementation (`LocalStorageService`) writing to `./uploads`.
    - Endpoints:
      - `GET /health`, `GET /api/health`: Public, returns `{"status": "ok", "db": "ok"}`.
-     - `GET /api/me`, `PUT /api/me`: User profile.
+     - `GET /api/me`, `PUT /api/me`: User profile (read-or-creates user and company).
+     - `GET /api/company`: Read-or-create user's company and list locations ordered by `position` with dynamically computed `evaluation_count`.
+     - `PATCH /api/company`: Update company `name` (trimmed <= 120 chars; empty string stored as `null`).
+     - `POST /api/company/locations`: Add location (`name` and `city` trimmed 1–80 chars, case-insensitive unique name per company -> 422, appended at next `position`, 201).
+     - `PATCH /api/company/locations/{id}`: Update location `name` and/or `city` (404 if not in user's company).
+     - `DELETE /api/company/locations/{id}`: Delete location if unused (204, re-numbers remaining positions without gaps); 409 `"Used by N evaluations."` if any evaluation references it.
      - `GET /api/criteria`: Read-or-create user evaluation criteria.
      - `PUT /api/criteria`: Atomic criteria set replacement with strict 422 validations.
-     - `GET /api/evaluations`: List evaluations and dynamically computed KPIs (`total`, `needs_action`, `analysed`, `open_clarifications`).
-     - `POST /api/evaluations`: Create evaluation in `draft` status with `title` and `category` required (`location` optional; `vendor_names` optional, 0–3).
-     - `GET / PATCH / DELETE /api/evaluations/{id}`: Evaluation CRUD with storage file cleanup on delete.
+     - `GET /api/evaluations`: List evaluations (including `location: {id, name, city} | null`) and dynamically computed KPIs (`total`, `needs_action`, `analysed`, `open_clarifications`).
+     - `POST /api/evaluations`: Create evaluation in `draft` status with `title` and `category` required (`location_id` optional, validated against user's company or 422 `"Unknown location."`; `vendor_names` optional, 0–3; free-text `location` removed).
+     - `GET / PATCH / DELETE /api/evaluations/{id}`: Evaluation CRUD with `location: {id, name, city} | null` in detail response, `location_id` support on `PATCH` (null clears, other company's -> 422 `"Unknown location."`), and storage file cleanup on delete.
      - `POST /api/evaluations/{id}/vendors`: Add a vendor (trimmed 1–80 chars, case-insensitive unique per evaluation, max 3 vendors -> 422 `"An evaluation can have at most 3 vendors."`, appended at next position; 409 while a job is active; transitions `analysed` -> `stale`).
      - `PATCH /api/evaluations/{id}/vendors/{vendor_id}`: Rename a vendor (trimmed 1–80 chars, case-insensitive unique per evaluation; 409 while a job is active; preserves evaluation status).
      - `DELETE /api/evaluations/{id}/vendors/{vendor_id}`: Remove a vendor and cascade-delete its proposal document, stored file via `StorageService`, `document_pages`, `findings`, `criterion_scores`, `cost_breakdowns`, and `clarifications` in one transaction; re-numbers remaining vendor positions without gaps; 409 while a job is active; transitions `analysed` -> `stale`.

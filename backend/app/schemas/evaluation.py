@@ -5,6 +5,8 @@ from typing import Any, Dict, List, Optional
 import uuid
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from app.schemas.company import EvaluationLocationResponse
+
 
 class EvaluationStatus(str, Enum):
     DRAFT = "draft"
@@ -55,7 +57,7 @@ class FindingStatus(str, Enum):
 class EvaluationCreate(BaseModel):
     title: str = Field(..., min_length=1, max_length=255)
     category: str = Field(..., min_length=1, max_length=100)
-    location: Optional[str] = None
+    location_id: Optional[uuid.UUID] = None
     vendor_names: Optional[List[str]] = Field(default_factory=list)
 
     @field_validator("title")
@@ -127,6 +129,7 @@ class EvaluationUpdate(BaseModel):
     title: Optional[str] = None
     category: Optional[str] = None
     status: Optional[EvaluationStatus] = None
+    location_id: Optional[uuid.UUID] = None
 
 
 class ExtractRequirementsRequest(BaseModel):
@@ -242,6 +245,7 @@ class EvaluationSummaryResponse(BaseModel):
     name: str  # alias for frontend mock compatibility
     name_short: Optional[str] = None
     category: str
+    location: Optional[EvaluationLocationResponse] = None
     status: EvaluationStatus
     lifecycle_status: str  # Capitalized display status for frontend
     vendors_count: int
@@ -263,6 +267,7 @@ class EvaluationDetailResponse(BaseModel):
     id: uuid.UUID
     title: str
     category: str
+    location: Optional[EvaluationLocationResponse] = None
     status: EvaluationStatus
     criteria_snapshot: Optional[List[Dict[str, Any]]] = None
     created_at: datetime

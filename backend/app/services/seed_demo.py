@@ -2,10 +2,11 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Optional
 import uuid
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import async_session
+from app.models.company import Company, Location
 from app.models.criteria import EvaluationCriterion
 from app.models.evaluation import (
     AnalysisJob,
@@ -19,10 +20,18 @@ from app.models.evaluation import (
     Vendor,
 )
 from app.models.user import User
+from app.repositories.company_repo import CompanyRepository
 from app.repositories.criteria_repo import CriteriaRepository
 from app.schemas.criteria import BUILTIN_CRITERIA_DEFAULTS, CriterionKind
 
 DEMO_EMAIL = "demo@vixenone.app"
+DEMO_COMPANY_NAME = "Northbridge Properties Pvt Ltd"
+DEMO_LOCATIONS = [
+    ("Andheri East Office", "Mumbai", 0),
+    ("Powai Campus", "Mumbai", 1),
+    ("BKC Office", "Mumbai", 2),
+    ("Thane Warehouse", "Thane", 3),
+]
 
 
 async def seed_demo_data(session: Optional[AsyncSession] = None) -> None:
@@ -42,20 +51,64 @@ async def seed_demo_data(session: Optional[AsyncSession] = None) -> None:
             return
 
         user = users[0]
+        extra_company_ids = [
+            u.company_id for u in users[1:] if u.company_id and u.company_id != user.company_id
+        ]
         for extra in users[1:]:
             await session.delete(extra)
         await session.flush()
+        if extra_company_ids:
+            await session.execute(delete(Company).where(Company.id.in_(extra_company_ids)))
 
         user_id = user.id
 
-        # 1. Ensure built-in criteria exist
+        # 1. Ensure company exists and set demo company name
+        company = await CompanyRepository.get_or_create_for_user(session, user)
+        company.name = DEMO_COMPANY_NAME
+        company.updated_at = func.now()
+        await session.flush()
+
+        # 2. Ensure built-in criteria exist
         await CriteriaRepository.get_or_create_builtins(session, user_id)
 
-        # 2. Clean existing demo evaluations for demo user
+        # 3. Clean existing demo evaluations for demo user
         existing_evals_stmt = select(Evaluation).where(Evaluation.user_id == user_id)
         existing_evals = (await session.execute(existing_evals_stmt)).scalars().all()
         for e in existing_evals:
             await session.delete(e)
+        await session.flush()
+
+        # 4. Upsert demo locations by name (case-insensitive) in order
+        demo_lower_names = {name.lower() for name, _, _ in DEMO_LOCATIONS}
+        existing_locs_stmt = select(Location).where(Location.company_id == company.id)
+        existing_locs = list((await session.execute(existing_locs_stmt)).scalars().all())
+        for loc in existing_locs:
+            if loc.name.strip().lower() not in demo_lower_names:
+                await session.delete(loc)
+        await session.flush()
+
+        loc_by_name = {}
+        for loc_name, loc_city, pos in DEMO_LOCATIONS:
+            loc_stmt = select(Location).where(
+                Location.company_id == company.id,
+                func.lower(Location.name) == loc_name.lower(),
+            )
+            loc_obj = (await session.execute(loc_stmt)).scalar_one_or_none()
+            if loc_obj is None:
+                loc_obj = Location(
+                    id=uuid.uuid5(uuid.NAMESPACE_DNS, f"vixenone.location.{loc_name.lower()}"),
+                    company_id=company.id,
+                    name=loc_name,
+                    city=loc_city,
+                    position=pos,
+                )
+                session.add(loc_obj)
+            else:
+                loc_obj.name = loc_name
+                loc_obj.city = loc_city
+                loc_obj.position = pos
+                loc_obj.updated_at = func.now()
+            loc_by_name[loc_name] = loc_obj
         await session.commit()
 
         # Build Criteria Snapshot for eval-1
@@ -97,10 +150,11 @@ async def seed_demo_data(session: Optional[AsyncSession] = None) -> None:
             },
         ]
 
-        # Evaluation 1: Analysed
+        # Evaluation 1: Analysed (Housekeeping -> Andheri East Office)
         eval_1 = Evaluation(
             id=uuid.UUID("11111111-1111-1111-1111-111111111111"),
             user_id=user_id,
+            location_id=loc_by_name["Andheri East Office"].id,
             title="Housekeeping Services — Andheri East Office, FY 2026–27",
             category="Facilities / Housekeeping",
             status="analysed",
@@ -401,10 +455,11 @@ async def seed_demo_data(session: Optional[AsyncSession] = None) -> None:
             finished_at=datetime(2026, 10, 12, 10, 4, 30, tzinfo=timezone.utc),
         ))
 
-        # Evaluation 2: Requirements review
+        # Evaluation 2: Requirements review (Security -> Powai Campus)
         eval_2 = Evaluation(
             id=uuid.UUID("11111111-2222-1111-1111-111111111111"),
             user_id=user_id,
+            location_id=loc_by_name["Powai Campus"].id,
             title="Security Services — Powai Campus",
             category="Facilities / Security",
             status="requirements_review",
@@ -452,10 +507,11 @@ async def seed_demo_data(session: Optional[AsyncSession] = None) -> None:
             started_at=datetime(2026, 10, 12, 11, 15, 0, tzinfo=timezone.utc),
         ))
 
-        # Evaluation 3: Stale
+        # Evaluation 3: Stale (Pantry -> BKC Office)
         eval_3 = Evaluation(
             id=uuid.UUID("11111111-3333-1111-1111-111111111111"),
             user_id=user_id,
+            location_id=loc_by_name["BKC Office"].id,
             title="Pantry & Cafeteria — BKC Office",
             category="Facilities / Housekeeping",
             status="stale",
@@ -504,10 +560,11 @@ async def seed_demo_data(session: Optional[AsyncSession] = None) -> None:
             finished_at=datetime(2026, 10, 8, 9, 21, 15, tzinfo=timezone.utc),
         ))
 
-        # Evaluation 4: Draft
+        # Evaluation 4: Draft (Pest Control -> Thane Warehouse)
         eval_4 = Evaluation(
             id=uuid.UUID("11111111-4444-1111-1111-111111111111"),
             user_id=user_id,
+            location_id=loc_by_name["Thane Warehouse"].id,
             title="Pest Control AMC — Thane Warehouse",
             category="Facilities / Housekeeping",
             status="draft",

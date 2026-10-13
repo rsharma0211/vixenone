@@ -30,10 +30,18 @@ def ensure_demo_seeded():
     async def init():
         async with async_session() as s:
             from sqlalchemy import select
+            from app.models.company import Company
             user = (await s.execute(select(User).where(User.email == "demo@vixenone.app"))).scalars().first()
             if not user:
+                company = Company(
+                    id=uuid.UUID("00000000-0000-0000-0000-000000000099"),
+                    name="Northbridge Properties Pvt Ltd",
+                )
+                s.add(company)
+                await s.flush()
                 user = User(
                     id=uuid.UUID("00000000-0000-0000-0000-000000000001"),
+                    company_id=company.id,
                     firebase_uid="demo-uid-vixenone",
                     email="demo@vixenone.app",
                     display_name="Priya Sharma",

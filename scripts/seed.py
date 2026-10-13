@@ -132,9 +132,15 @@ def seed_demo_user():
         if not seeded_in_postgres and local_id:
             try:
                 sql = (
-                    f"INSERT INTO users (id, firebase_uid, email, display_name, role) "
-                    f"VALUES (gen_random_uuid(), '{local_id}', '{EMAIL}', '{DISPLAY_NAME}', '{ROLE}') "
-                    f"ON CONFLICT (firebase_uid) DO UPDATE SET display_name = '{DISPLAY_NAME}', role = '{ROLE}';"
+                    "DO $$ DECLARE cid UUID; BEGIN "
+                    f"SELECT company_id INTO cid FROM users WHERE firebase_uid = '{local_id}'; "
+                    "IF cid IS NULL THEN "
+                    "INSERT INTO companies (id, name) VALUES (gen_random_uuid(), NULL) RETURNING id INTO cid; "
+                    "INSERT INTO users (id, company_id, firebase_uid, email, display_name, role) "
+                    f"VALUES (gen_random_uuid(), cid, '{local_id}', '{EMAIL}', '{DISPLAY_NAME}', '{ROLE}'); "
+                    "ELSE "
+                    f"UPDATE users SET display_name = '{DISPLAY_NAME}', role = '{ROLE}' WHERE firebase_uid = '{local_id}'; "
+                    "END IF; END $$;"
                 )
                 subprocess.run(
                     ["docker", "compose", "exec", "-T", "postgres", "psql", "-U", "vixenone", "-d", "vixenone", "-c", sql],

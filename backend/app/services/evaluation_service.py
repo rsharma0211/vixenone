@@ -5,8 +5,10 @@ from fastapi import HTTPException, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.evaluation import Document, Evaluation
+from app.repositories.company_repo import CompanyRepository
 from app.repositories.criteria_repo import CriteriaRepository
 from app.repositories.evaluation_repo import EvaluationRepository
+from app.schemas.company import EvaluationLocationResponse
 from app.schemas.criteria import BUILTIN_CRITERIA_DEFAULTS
 from app.schemas.evaluation import (
     AnalysisJobResponse,
@@ -40,6 +42,21 @@ class EvaluationService:
         return mapping.get(status, status.capitalize())
 
     @staticmethod
+    async def validate_company_location(
+        session: AsyncSession,
+        company_id: uuid.UUID,
+        location_id: Optional[uuid.UUID],
+    ) -> None:
+        if location_id is None:
+            return
+        loc = await CompanyRepository.get_location(session, company_id, location_id)
+        if not loc:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Unknown location.",
+            )
+
+    @staticmethod
     async def get_summary_list(
         session: AsyncSession, user_id: uuid.UUID
     ) -> Dict[str, Any]:
@@ -59,6 +76,7 @@ class EvaluationService:
                     name=e.title,
                     name_short=e.title.split("—")[0].strip() if "—" in e.title else e.title,
                     category=e.category,
+                    location=EvaluationLocationResponse.model_validate(e.location) if e.location else None,
                     status=e.status,
                     lifecycle_status=EvaluationService._map_lifecycle_status(e.status),
                     vendors_count=vendors_count,
@@ -86,6 +104,7 @@ class EvaluationService:
             id=eval_obj.id,
             title=eval_obj.title,
             category=eval_obj.category,
+            location=EvaluationLocationResponse.model_validate(eval_obj.location) if eval_obj.location else None,
             status=eval_obj.status,
             criteria_snapshot=eval_obj.criteria_snapshot,
             created_at=eval_obj.created_at,

@@ -1,10 +1,11 @@
 from typing import Optional
 import uuid
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql import func
 
+from app.models.company import Company
 from app.models.user import User
 from app.schemas.user import UserRole
 
@@ -32,10 +33,16 @@ class UserRepository:
         if user is not None:
             return user
 
+        new_company_id = uuid.uuid4()
+        await session.execute(
+            insert(Company).values(id=new_company_id, name=None)
+        )
+
         insert_stmt = (
             insert(User)
             .values(
                 id=uuid.uuid4(),
+                company_id=new_company_id,
                 firebase_uid=firebase_uid,
                 email=email,
                 display_name=display_name,
@@ -48,8 +55,13 @@ class UserRepository:
             .returning(User)
         )
         result = await session.scalars(insert_stmt)
+        created_user = result.one()
+        if created_user.company_id != new_company_id:
+            await session.execute(
+                delete(Company).where(Company.id == new_company_id)
+            )
         await session.commit()
-        return result.one()
+        return created_user
 
     @staticmethod
     async def update(

@@ -2,6 +2,7 @@ from contextlib import asynccontextmanager
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.company import router as company_router
 from app.api.criteria import router as criteria_router
 from app.api.evaluations import router as evaluations_router
 from app.api.users import router as users_router
@@ -42,6 +43,7 @@ app.add_middleware(
 )
 
 app.include_router(users_router)
+app.include_router(company_router)
 app.include_router(criteria_router)
 app.include_router(evaluations_router)
 

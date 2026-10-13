@@ -75,14 +75,15 @@ def test_create_evaluation_validation():
         assert r0.json()["status"] == "draft"
         assert r0.json()["vendors"] == []
 
-        # Create with explicit empty vendor_names and optional location -> 201 draft
+        # Create with explicit empty vendor_names and optional location_id -> 201 draft
         r0_empty = client.post(
             "/api/evaluations",
             headers=auth,
-            json={"title": "Two-Step RFP Mumbai", "category": "Facilities", "location": "Mumbai", "vendor_names": []},
+            json={"title": "Two-Step RFP Mumbai", "category": "Facilities", "location_id": None, "vendor_names": []},
         )
         assert r0_empty.status_code == 201
         assert r0_empty.json()["status"] == "draft"
+        assert r0_empty.json()["location"] is None
         assert r0_empty.json()["vendors"] == []
 
         # Create with 1 vendor -> 201 draft

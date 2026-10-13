@@ -31,11 +31,13 @@ class EvaluationRepository:
             select(Evaluation)
             .where(Evaluation.id == evaluation_id, Evaluation.user_id == user_id)
             .options(
+                selectinload(Evaluation.location),
                 selectinload(Evaluation.vendors),
                 selectinload(Evaluation.documents),
                 selectinload(Evaluation.requirements),
                 selectinload(Evaluation.jobs),
             )
+            .execution_options(populate_existing=True)
         )
         result = await session.execute(stmt)
         return result.scalar_one_or_none()
@@ -48,6 +50,7 @@ class EvaluationRepository:
             select(Evaluation)
             .where(Evaluation.user_id == user_id)
             .options(
+                selectinload(Evaluation.location),
                 selectinload(Evaluation.vendors),
                 selectinload(Evaluation.requirements),
                 selectinload(Evaluation.jobs),
@@ -93,10 +96,12 @@ class EvaluationRepository:
         title: str,
         category: str,
         vendor_names: Optional[List[str]] = None,
+        location_id: Optional[uuid.UUID] = None,
     ) -> Evaluation:
         eval_obj = Evaluation(
             id=uuid.uuid4(),
             user_id=user_id,
+            location_id=location_id,
             title=title,
             category=category,
             status=EvaluationStatus.DRAFT.value,
@@ -234,6 +239,8 @@ class EvaluationRepository:
         title: Optional[str] = None,
         category: Optional[str] = None,
         status: Optional[str] = None,
+        location_id: Optional[uuid.UUID] = None,
+        update_location: bool = False,
     ) -> Optional[Evaluation]:
         eval_obj = await EvaluationRepository.get_by_id(session, user_id, evaluation_id)
         if not eval_obj:
@@ -245,6 +252,8 @@ class EvaluationRepository:
             eval_obj.category = category
         if status is not None:
             eval_obj.status = status
+        if update_location:
+            eval_obj.location_id = location_id
         eval_obj.updated_at = func.now()
 
         await session.commit()

@@ -44,12 +44,14 @@ async def create_evaluation(
     db: AsyncSession = Depends(get_db),
 ) -> EvaluationDetailResponse:
     user = await UserService.get_or_create_profile(db, current_user)
+    await EvaluationService.validate_company_location(db, user.company_id, payload.location_id)
     eval_obj = await EvaluationRepository.create(
         db,
         user.id,
         title=payload.title,
         category=payload.category,
         vendor_names=payload.vendor_names,
+        location_id=payload.location_id,
     )
     return await EvaluationService.get_detail(db, user.id, eval_obj.id)
 
@@ -72,19 +74,25 @@ async def update_evaluation(
     db: AsyncSession = Depends(get_db),
 ) -> EvaluationDetailResponse:
     user = await UserService.get_or_create_profile(db, current_user)
-    eval_obj = await EvaluationRepository.update(
+    existing = await EvaluationRepository.get_by_id(db, user.id, id)
+    if not existing:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Evaluation {id} not found",
+        )
+    update_location = "location_id" in payload.model_fields_set
+    if update_location and payload.location_id is not None:
+        await EvaluationService.validate_company_location(db, user.company_id, payload.location_id)
+    await EvaluationRepository.update(
         db,
         user.id,
         id,
         title=payload.title,
         category=payload.category,
         status=payload.status.value if payload.status else None,
+        location_id=payload.location_id,
+        update_location=update_location,
     )
-    if not eval_obj:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Evaluation {id} not found",
-        )
     return await EvaluationService.get_detail(db, user.id, id)
 
 

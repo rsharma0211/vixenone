@@ -34,6 +34,12 @@ class Evaluation(Base):
         nullable=False,
         index=True,
     )
+    location_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("locations.id", ondelete="RESTRICT"),
+        nullable=True,
+        index=True,
+    )
     title: Mapped[str] = mapped_column(
         String(255),
         nullable=False,
@@ -64,6 +70,7 @@ class Evaluation(Base):
         onupdate=func.now(),
     )
 
+    location = relationship("Location")
     vendors = relationship("Vendor", back_populates="evaluation", cascade="all, delete-orphan", order_by="Vendor.position")
     documents = relationship("Document", back_populates="evaluation", cascade="all, delete-orphan")
     requirements = relationship("Requirement", back_populates="evaluation", cascade="all, delete-orphan", order_by="Requirement.position")
