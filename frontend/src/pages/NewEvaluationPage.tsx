@@ -1,22 +1,52 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { AlertCircle } from 'lucide-react';
-import { apiClient, ApiValidationError } from '@/lib/api/client';
+import {
+  apiClient,
+  ApiValidationError,
+  LocationResponse,
+} from '@/lib/api/client';
+import { AddLocationDialog } from '@/components/AddLocationDialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 
 // Screen: S3 step 1 (Create evaluation). Vendors and files are managed on the Documents tab.
 
 const CATEGORY_OPTIONS = ['Facilities / Housekeeping', 'Facilities / Security'];
+const ADD_NEW_LOCATION_VALUE = '__add_new_location__';
 
 export const NewEvaluationPage: React.FC = () => {
   const navigate = useNavigate();
 
   const [title, setTitle] = useState<string>('');
   const [category, setCategory] = useState<string>('');
+  const [locations, setLocations] = useState<LocationResponse[]>([]);
+  const [selectedLocationId, setSelectedLocationId] = useState<string>('');
+  const [previousLocationId, setPreviousLocationId] = useState<string>('');
+  const [addLocationOpen, setAddLocationOpen] = useState<boolean>(false);
+
   const [creating, setCreating] = useState<boolean>(false);
   const [pageError, setPageError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    let active = true;
+    apiClient
+      .getCompany()
+      .then((company) => {
+        if (!active) return;
+        const sorted = [...(company.locations ?? [])].sort(
+          (a, b) => a.position - b.position
+        );
+        setLocations(sorted);
+      })
+      .catch(() => {
+        // Location remains optional if loading company locations fails
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const canCreate = !creating && Boolean(title.trim()) && Boolean(category.trim());
 
@@ -29,10 +59,10 @@ export const NewEvaluationPage: React.FC = () => {
       setPageError(null);
       setFieldErrors({});
 
-      // Location is not sent: the api accepts it but neither stores nor returns it.
       const detail = await apiClient.createEvaluation({
         title: title.trim(),
         category,
+        location_id: selectedLocationId ? selectedLocationId : null,
       });
 
       navigate(`/evaluations/${detail.id}/documents`, { replace: true });
@@ -93,7 +123,7 @@ export const NewEvaluationPage: React.FC = () => {
               setTitle(e.target.value);
               setFieldErrors((prev) => ({ ...prev, title: '' }));
             }}
-            placeholder="e.g. Housekeeping Services — Main Office"
+            placeholder="e.g. Housekeeping Services — FY 2026–27"
             className={fieldErrors.title ? 'border-status-noncompliant-text' : ''}
           />
           {fieldErrors.title && (
@@ -130,6 +160,40 @@ export const NewEvaluationPage: React.FC = () => {
           )}
         </div>
 
+        <div className="space-y-1.5 sm:max-w-sm">
+          <label htmlFor="eval-location" className="text-xs font-medium text-text block">
+            Location
+          </label>
+          <select
+            id="eval-location"
+            value={selectedLocationId}
+            onChange={(e) => {
+              const val = e.target.value;
+              if (val === ADD_NEW_LOCATION_VALUE) {
+                setPreviousLocationId(selectedLocationId);
+                setAddLocationOpen(true);
+                return;
+              }
+              setSelectedLocationId(val);
+              setFieldErrors((prev) => ({ ...prev, location_id: '' }));
+            }}
+            className={`flex h-9 w-full rounded-lg border bg-background px-3 py-1 text-sm text-text focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring focus-visible:border-ring ${
+              fieldErrors.location_id ? 'border-status-noncompliant-text' : 'border-border'
+            }`}
+          >
+            <option value="">No specific location</option>
+            {locations.map((loc) => (
+              <option key={loc.id} value={loc.id}>
+                {loc.name}, {loc.city}
+              </option>
+            ))}
+            <option value={ADD_NEW_LOCATION_VALUE}>+ Add new location</option>
+          </select>
+          {fieldErrors.location_id && (
+            <p className="text-xs text-status-noncompliant-text">{fieldErrors.location_id}</p>
+          )}
+        </div>
+
         <div className="pt-2 flex justify-end items-center gap-3 border-t border-border">
           <Button type="button" variant="outline" onClick={() => navigate('/evaluations')}>
             Cancel
@@ -139,6 +203,20 @@ export const NewEvaluationPage: React.FC = () => {
           </Button>
         </div>
       </form>
+
+      <AddLocationDialog
+        open={addLocationOpen}
+        onCreated={(created) => {
+          setLocations((prev) => [...prev, created]);
+          setSelectedLocationId(created.id);
+          setFieldErrors((prev) => ({ ...prev, location_id: '' }));
+          setAddLocationOpen(false);
+        }}
+        onCancel={() => {
+          setSelectedLocationId(previousLocationId);
+          setAddLocationOpen(false);
+        }}
+      />
     </div>
   );
 };

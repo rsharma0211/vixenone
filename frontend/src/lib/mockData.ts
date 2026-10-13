@@ -135,8 +135,8 @@ export function mapJobStatusToLifecycle(
 export const mockEvaluations: Evaluation[] = [
   {
     id: 'eval-1',
-    name: 'Housekeeping Services — Andheri East Office, FY 2026–27',
-    name_short: 'Housekeeping — Andheri East',
+    name: 'Housekeeping Services — FY 2026–27',
+    name_short: 'Housekeeping Services',
     category: 'Facilities / Housekeeping',
     contract_type: 'Monthly contract',
     total_requirements: 18,
@@ -155,8 +155,8 @@ export const mockEvaluations: Evaluation[] = [
   },
   {
     id: 'eval-2',
-    name: 'Security Services — Powai Campus',
-    name_short: 'Security — Powai Campus',
+    name: 'Security Services — FY 2026–27',
+    name_short: 'Security Services',
     category: 'Facilities / Security',
     contract_type: 'Monthly contract',
     total_requirements: 14,
@@ -175,8 +175,8 @@ export const mockEvaluations: Evaluation[] = [
   },
   {
     id: 'eval-3',
-    name: 'Pantry & Cafeteria — BKC Office',
-    name_short: 'Pantry & Cafeteria — BKC',
+    name: 'Pantry & Cafeteria Services',
+    name_short: 'Pantry & Cafeteria',
     category: 'Facilities / Housekeeping',
     contract_type: 'Monthly contract',
     total_requirements: 12,
@@ -195,8 +195,8 @@ export const mockEvaluations: Evaluation[] = [
   },
   {
     id: 'eval-4',
-    name: 'Pest Control AMC — Thane Warehouse',
-    name_short: 'Pest Control AMC — Thane Warehouse',
+    name: 'Pest Control AMC',
+    name_short: 'Pest Control AMC',
     category: 'Facilities / Housekeeping',
     contract_type: 'Annual contract',
     total_requirements: 8,

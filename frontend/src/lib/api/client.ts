@@ -19,6 +19,13 @@ type VendorCreate = Schemas['VendorCreate'];
 type VendorUpdate = Schemas['VendorUpdate'];
 type VendorResponse = Schemas['VendorResponse'];
 
+export type CompanyResponse = Schemas['CompanyResponse'];
+export type CompanyUpdate = Schemas['CompanyUpdate'];
+export type LocationResponse = Schemas['LocationResponse'];
+export type LocationCreate = Schemas['LocationCreate'];
+export type LocationUpdate = Schemas['LocationUpdate'];
+export type EvaluationLocationResponse = Schemas['EvaluationLocationResponse'];
+
 const BASE_URL = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
 
 export interface UserProfile {
@@ -79,6 +86,8 @@ export function extractValidationErrors(data: unknown): {
     const lower = detail.toLowerCase();
     if (lower.includes('weight')) fieldErrors['weight'] = detail;
     if (lower.includes('name')) fieldErrors['name'] = detail;
+    if (lower.includes('city')) fieldErrors['city'] = detail;
+    if (lower.includes('location')) fieldErrors['location_id'] = detail;
     if (lower.includes('guidance')) fieldErrors['guidance'] = detail;
     if (lower.includes('vendor')) fieldErrors['vendor_names'] = detail;
     if (lower.includes('title')) fieldErrors['title'] = detail;
@@ -184,6 +193,67 @@ class ApiClient {
       body: JSON.stringify(data),
     });
     return this.handleResponse<UserProfile>(response);
+  }
+
+  // --- Company & Locations ---
+  async getCompany(): Promise<CompanyResponse> {
+    const headers = await this.getAuthHeader();
+    const response = await fetch(`${BASE_URL}/api/company`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        ...headers,
+      },
+    });
+    return this.handleResponse<CompanyResponse>(response);
+  }
+
+  async updateCompany(payload: CompanyUpdate): Promise<CompanyResponse> {
+    const headers = await this.getAuthHeader();
+    const response = await fetch(`${BASE_URL}/api/company`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        ...headers,
+      },
+      body: JSON.stringify(payload),
+    });
+    return this.handleResponse<CompanyResponse>(response);
+  }
+
+  async addLocation(payload: LocationCreate): Promise<LocationResponse> {
+    const headers = await this.getAuthHeader();
+    const response = await fetch(`${BASE_URL}/api/company/locations`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...headers,
+      },
+      body: JSON.stringify(payload),
+    });
+    return this.handleResponse<LocationResponse>(response);
+  }
+
+  async updateLocation(id: string, payload: LocationUpdate): Promise<LocationResponse> {
+    const headers = await this.getAuthHeader();
+    const response = await fetch(`${BASE_URL}/api/company/locations/${id}`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        ...headers,
+      },
+      body: JSON.stringify(payload),
+    });
+    return this.handleResponse<LocationResponse>(response);
+  }
+
+  async deleteLocation(id: string): Promise<void> {
+    const headers = await this.getAuthHeader();
+    const response = await fetch(`${BASE_URL}/api/company/locations/${id}`, {
+      method: 'DELETE',
+      headers,
+    });
+    return this.handleResponse<void>(response);
   }
 
   // --- Criteria ---

@@ -217,7 +217,7 @@ export const DevComponentsPage: React.FC = () => {
         <CardContent className="space-y-4">
           <div>
             <div className="text-xs text-muted">Page Title (24/600):</div>
-            <div className="text-page-title text-text">Housekeeping Services — Andheri East Office</div>
+            <div className="text-page-title text-text">Housekeeping Services — FY 2026–27</div>
           </div>
           <div>
             <div className="text-xs text-muted">Section Title (18/600):</div>

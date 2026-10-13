@@ -22,6 +22,59 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/company": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Company */
+        get: operations["get_company_api_company_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update Company */
+        patch: operations["update_company_api_company_patch"];
+        trace?: never;
+    };
+    "/api/company/locations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Add Location */
+        post: operations["add_location_api_company_locations_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/company/locations/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Location */
+        delete: operations["delete_location_api_company_locations__id__delete"];
+        options?: never;
+        head?: never;
+        /** Update Location */
+        patch: operations["update_location_api_company_locations__id__patch"];
+        trace?: never;
+    };
     "/api/criteria": {
         parameters: {
             query?: never;
@@ -295,6 +348,23 @@ export interface components {
             /** Vendor Id */
             vendor_id?: string | null;
         };
+        /** CompanyResponse */
+        CompanyResponse: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name?: string | null;
+            /** Locations */
+            locations?: components["schemas"]["LocationResponse"][];
+        };
+        /** CompanyUpdate */
+        CompanyUpdate: {
+            /** Name */
+            name?: string | null;
+        };
         /** CostBreakdownResponse */
         CostBreakdownResponse: {
             /**
@@ -409,8 +479,8 @@ export interface components {
             title: string;
             /** Category */
             category: string;
-            /** Location */
-            location?: string | null;
+            /** Location Id */
+            location_id?: string | null;
             /** Vendor Names */
             vendor_names?: string[] | null;
         };
@@ -478,6 +548,7 @@ export interface components {
             title: string;
             /** Category */
             category: string;
+            location?: components["schemas"]["EvaluationLocationResponse"] | null;
             status: components["schemas"]["EvaluationStatus"];
             /** Criteria Snapshot */
             criteria_snapshot?: Record<string, never>[] | null;
@@ -509,6 +580,18 @@ export interface components {
             analysed: number;
             /** Open Clarifications */
             open_clarifications: number;
+        };
+        /** EvaluationLocationResponse */
+        EvaluationLocationResponse: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /** City */
+            city: string;
         };
         /** EvaluationResultsResponse */
         EvaluationResultsResponse: {
@@ -553,6 +636,7 @@ export interface components {
             name_short?: string | null;
             /** Category */
             category: string;
+            location?: components["schemas"]["EvaluationLocationResponse"] | null;
             status: components["schemas"]["EvaluationStatus"];
             /** Lifecycle Status */
             lifecycle_status: string;
@@ -581,6 +665,8 @@ export interface components {
             /** Category */
             category?: string | null;
             status?: components["schemas"]["EvaluationStatus"] | null;
+            /** Location Id */
+            location_id?: string | null;
         };
         /** EvaluationsListResponse */
         EvaluationsListResponse: {
@@ -674,6 +760,39 @@ export interface components {
          * @enum {string}
          */
         JobStatus: "queued" | "extracting" | "analysing" | "done" | "failed";
+        /** LocationCreate */
+        LocationCreate: {
+            /** Name */
+            name: string;
+            /** City */
+            city: string;
+        };
+        /** LocationResponse */
+        LocationResponse: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /** City */
+            city: string;
+            /** Position */
+            position: number;
+            /**
+             * Evaluation Count
+             * @default 0
+             */
+            evaluation_count: number;
+        };
+        /** LocationUpdate */
+        LocationUpdate: {
+            /** Name */
+            name?: string | null;
+            /** City */
+            city?: string | null;
+        };
         /** RequirementItem */
         RequirementItem: {
             /** Id */
@@ -862,6 +981,156 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["UserProfileResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_company_api_company_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompanyResponse"];
+                };
+            };
+        };
+    };
+    update_company_api_company_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CompanyUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompanyResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    add_location_api_company_locations_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LocationCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LocationResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_location_api_company_locations__id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_location_api_company_locations__id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LocationUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LocationResponse"];
                 };
             };
             /** @description Validation Error */

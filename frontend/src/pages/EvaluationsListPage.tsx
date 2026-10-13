@@ -368,9 +368,13 @@ export const EvaluationsListPage: React.FC = () => {
             ) : (
               filteredEvaluations.map((ev) => {
                 const isDraft = ev.status === 'draft';
-                const subline = isDraft
+                const reqText = isDraft
                   ? 'Not extracted yet'
                   : `${ev.total_requirements || 0} requirements`;
+                const locationText = ev.location
+                  ? `${ev.location.name}, ${ev.location.city}`
+                  : null;
+                const subline = locationText ? `${locationText} · ${reqText}` : reqText;
 
                 // Map lifecycle status string to LifecycleStatus component prop
                 const lifecycleProp =

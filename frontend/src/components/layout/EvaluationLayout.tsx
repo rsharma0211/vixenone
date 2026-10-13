@@ -66,6 +66,9 @@ export const EvaluationLayout: React.FC = () => {
   const title = evaluationDetail?.title || '';
   const shortTitle = title.includes('—') ? title.split('—')[0].trim() : title;
   const category = evaluationDetail?.category || '';
+  const locationLabel = evaluationDetail?.location
+    ? `${evaluationDetail.location.name}, ${evaluationDetail.location.city}`
+    : null;
 
   const tabs = [
     { name: 'Documents', path: `/evaluations/${id}/documents` },
@@ -94,6 +97,7 @@ export const EvaluationLayout: React.FC = () => {
         </h1>
 
         <p className="text-body text-muted">
+          {locationLabel ? `${locationLabel} · ` : ''}
           {category ? `${category} · ` : ''}
           {savedRequirementCount} requirement{savedRequirementCount === 1 ? '' : 's'} (
           {savedMandatoryCount} mandatory)
