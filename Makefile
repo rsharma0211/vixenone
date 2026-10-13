@@ -81,8 +81,8 @@ type-check-api:
 	fi
 
 cloud-login:
-	./scripts/cloud-tools.sh gcloud auth login --no-browser
-	./scripts/cloud-tools.sh gcloud auth application-default login --no-browser
+	./scripts/cloud-tools.sh gcloud auth login --no-launch-browser
+	./scripts/cloud-tools.sh gcloud auth application-default login --no-launch-browser
 	./scripts/cloud-tools.sh firebase login --no-localhost
 
 cloud-config:

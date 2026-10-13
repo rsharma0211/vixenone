@@ -127,7 +127,7 @@ The local development stack consists of four Docker containers on a shared bridg
    - Depends on healthy `api`.
 
 5. **`cloud-tools` (Host Tools Runner)**:
-   - On-demand container built from `infra/docker/tools/Dockerfile` based on `google/cloud-sdk:588.0.0-slim` with Node LTS (`node:20.18.0-bookworm-slim`) and Firebase CLI (`firebase-tools@13.29.1`).
+   - On-demand container built from `infra/docker/tools/Dockerfile` based on `google/cloud-sdk:588.0.0-slim` with Node LTS (`node:24.21.0-bookworm-slim`) and Firebase CLI (`firebase-tools@15.33.0`).
    - Run via `scripts/cloud-tools.sh` mounting the repository at `/workspace` with interactive terminal pass-through (`-i` / `-it`).
    - Auth and session state persisted strictly in named Docker volumes (`vixenone_gcloud_config` at `/root/.config/gcloud`, `vixenone_firebase_config` at `/root/.config/configstore`, `vixenone_firebase_home` at `/root/.firebase`), keeping all cloud credentials off the repository filesystem.
    - Orchestrated via `make cloud-login`, `make cloud-config`, and `make cloud-check`.

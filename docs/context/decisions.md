@@ -65,6 +65,7 @@ Append-only record of architectural and implementation decisions. Format: `YYYY-
 - 2026-10-13 — Firebase Hosting same-origin routing plan — Firebase Hosting rewrites `/api/**` to the Cloud Run `api` service so frontend and API share the same origin, eliminating CORS in production.
 - 2026-10-13 — Alembic interpolation bypass for percent-encoded database URLs and Makefile closeout targets — Disable configparser template interpolation on Alembic file_config to safely support database URLs with percent-encoded password characters (e.g. %3B, %3E, %28), and add explicit Makefile lint-api, type-check-api, and prepare targets.
 - 2026-10-13 — Containerized cloud tools runner with named Docker volumes for auth state — Pinned Google Cloud SDK, Node LTS, and Firebase CLI in an isolated container mounting the repository at /workspace while keeping gcloud and Firebase auth credentials strictly in named Docker volumes (vixenone_gcloud_config, vixenone_firebase_config) off the host filesystem.
+- 2026-10-13 — Cloud tools login fix with --no-launch-browser and pinned Node LTS 24.21.0 / Firebase CLI 15.33.0 — Replaced gcloud --no-browser flag with --no-launch-browser in Makefile cloud-login because no-browser requires gcloud on a second machine; updated Node LTS to 24.21.0 and Firebase CLI to 15.33.0 in tools container image.
 
 
 
