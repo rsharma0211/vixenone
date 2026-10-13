@@ -93,10 +93,20 @@ async def seed_demo_data(session: Optional[AsyncSession] = None) -> None:
                 Location.company_id == company.id,
                 func.lower(Location.name) == loc_name.lower(),
             )
-            loc_obj = (await session.execute(loc_stmt)).scalar_one_or_none()
-            if loc_obj is None:
+            loc_id = uuid.uuid5(uuid.NAMESPACE_DNS, f"vixenone.location.{loc_name.lower()}")
+            loc_by_id_stmt = select(Location).where(Location.id == loc_id)
+            loc_by_id = (await session.execute(loc_by_id_stmt)).scalar_one_or_none()
+
+            if loc_by_id is not None:
+                loc_obj = loc_by_id
+                loc_obj.company_id = company.id
+                loc_obj.name = loc_name
+                loc_obj.city = loc_city
+                loc_obj.position = pos
+                loc_obj.updated_at = func.now()
+            elif loc_obj is None:
                 loc_obj = Location(
-                    id=uuid.uuid5(uuid.NAMESPACE_DNS, f"vixenone.location.{loc_name.lower()}"),
+                    id=loc_id,
                     company_id=company.id,
                     name=loc_name,
                     city=loc_city,

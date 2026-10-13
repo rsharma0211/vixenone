@@ -1,12 +1,15 @@
 from contextlib import asynccontextmanager
+import logging
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
+from starlette.requests import Request
+from starlette.responses import Response
 
 from app.api.company import router as company_router
 from app.api.criteria import router as criteria_router
 from app.api.evaluations import router as evaluations_router
 from app.api.users import router as users_router
-import logging
 from app.core.auth import init_firebase
 from app.core.config import settings
 from app.core.database import async_session, check_db_health
@@ -41,6 +44,16 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+class NoCacheMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
+        response = await call_next(request)
+        response.headers["Cache-Control"] = "no-store"
+        return response
+
+
+app.add_middleware(NoCacheMiddleware)
 
 app.include_router(users_router)
 app.include_router(company_router)

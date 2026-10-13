@@ -24,7 +24,11 @@ logs:
 	docker compose logs -f
 
 seed:
-	@python3 scripts/seed.py
+	@if docker compose ps --services --filter "status=running" | grep -q "^api$$"; then \
+		docker compose exec -T api python -m app.cli.seed; \
+	else \
+		docker compose run --rm -T api python -m app.cli.seed; \
+	fi
 
 reset:
 	docker compose down -v

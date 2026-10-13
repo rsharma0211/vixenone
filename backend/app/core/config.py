@@ -22,7 +22,13 @@ class Settings(BaseSettings):
 
     # File Storage
     STORAGE_BACKEND: str = "local"
+    STORAGE_BUCKET_NAME: Optional[str] = None
+    GCS_BUCKET_NAME: Optional[str] = None
     UPLOAD_DIR: str = "/app/uploads"
+
+    @property
+    def storage_bucket(self) -> Optional[str]:
+        return self.STORAGE_BUCKET_NAME or self.GCS_BUCKET_NAME
 
     @property
     def is_production(self) -> bool:
