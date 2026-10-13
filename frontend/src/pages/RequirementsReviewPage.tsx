@@ -16,6 +16,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
+import { EvaluationTabHeader } from '@/components/EvaluationTabHeader';
 import { RerunExtractionDialog } from '@/components/RerunExtractionDialog';
 import { useUnsavedChangesGuard } from '@/components/UnsavedChangesGuard';
 import {
@@ -647,6 +648,7 @@ export const RequirementsReviewPage: React.FC = () => {
   }
 
   const isStale = evaluation?.status === 'stale';
+  const isJobFailed = latestJob?.status === 'failed' && !jobActive;
   const isAnalysedOrStale =
     evaluation?.status === 'analysed' || evaluation?.status === 'stale';
   const vendors = evaluation?.vendors || [];
@@ -685,6 +687,82 @@ export const RequirementsReviewPage: React.FC = () => {
           ))}
         </div>
 
+        {/* Section Header */}
+        <EvaluationTabHeader
+          title="Requirements"
+          counts={`${rows.length} requirement${rows.length === 1 ? '' : 's'} · ${mandatoryCount} mandatory`}
+          actions={
+            <>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleAddRow}
+                disabled={saving || rerunning}
+                className="gap-1.5 shrink-0"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Add requirement</span>
+              </Button>
+
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleClickRerunExtraction}
+                disabled={saving || rerunning}
+                className="gap-1.5 shrink-0"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+                <span>{rerunning ? 'Starting...' : 'Re-run extraction'}</span>
+              </Button>
+
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleSave}
+                disabled={!canSave}
+                className="font-semibold shrink-0"
+              >
+                {saving ? 'Saving...' : 'Save changes'}
+              </Button>
+
+              {/* Run Analysis Action */}
+              {jobActive && (
+                <div className="flex items-center gap-1.5 text-xs text-muted shrink-0">
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin text-accent" />
+                  <span>{latestJob?.step_label || 'Analysing...'}</span>
+                </div>
+              )}
+              {isDirty ? (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span tabIndex={0} className="inline-block shrink-0">
+                      <Button
+                        variant="primary"
+                        size="sm"
+                        disabled={true}
+                        className="gap-1.5 font-semibold shrink-0"
+                      >
+                        <span>Run analysis</span>
+                      </Button>
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent>Save your changes first</TooltipContent>
+                </Tooltip>
+              ) : (
+                <Button
+                  variant="primary"
+                  size="sm"
+                  disabled={jobActive || startingAnalysis || saving || rerunning}
+                  onClick={handleClickRunAnalysis}
+                  className="gap-1.5 font-semibold shrink-0"
+                >
+                  <span>Run analysis</span>
+                </Button>
+              )}
+            </>
+          }
+        />
+
         {/* Stale Banner when evaluation status is stale */}
         {isStale && (
           <div
@@ -698,130 +776,65 @@ export const RequirementsReviewPage: React.FC = () => {
           </div>
         )}
 
+        {/* Job Error Alert Bar */}
+        {isJobFailed && (
+          <div
+            role="alert"
+            className="rounded-lg border border-status-noncompliant-text/30 bg-status-noncompliant-bg px-4 py-3 text-sm text-status-noncompliant-text flex items-center justify-between gap-4"
+          >
+            <div className="flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 shrink-0" />
+              <span>{latestJob?.error_message || 'Analysis failed.'}</span>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() =>
+                startAnalysis(
+                  hasResults ||
+                    evaluation?.status === 'analysed' ||
+                    evaluation?.status === 'stale'
+                )
+              }
+              className="shrink-0"
+            >
+              Try again
+            </Button>
+          </div>
+        )}
+
+        {/* Analysis trigger error */}
+        {analyseError && (
+          <div
+            role="alert"
+            className="rounded-lg border border-status-noncompliant-text/30 bg-status-noncompliant-bg px-4 py-3 text-sm text-status-noncompliant-text flex items-center gap-2"
+          >
+            <AlertCircle className="w-4 h-4 shrink-0" />
+            <span>{analyseError}</span>
+          </div>
+        )}
+
         {/* Error & Success Notifications */}
         {errorBanner && (
-          <div className="rounded-lg border border-status-noncompliant-text/30 bg-status-noncompliant-bg px-4 py-3 text-sm text-status-noncompliant-text flex items-center gap-2">
+          <div
+            role="alert"
+            className="rounded-lg border border-status-noncompliant-text/30 bg-status-noncompliant-bg px-4 py-3 text-sm text-status-noncompliant-text flex items-center gap-2"
+          >
             <AlertCircle className="w-4 h-4 shrink-0" />
             <span>{errorBanner}</span>
           </div>
         )}
 
         {successBanner && (
-          <div className="rounded-lg border border-status-compliant-text/30 bg-status-compliant-bg px-4 py-3 text-sm text-status-compliant-text flex items-center gap-2">
+          <div
+            role="alert"
+            className="rounded-lg border border-status-compliant-text/30 bg-status-compliant-bg px-4 py-3 text-sm text-status-compliant-text flex items-center gap-2"
+          >
             <CheckCircle2 className="w-4 h-4 shrink-0" />
             <span>{successBanner}</span>
           </div>
         )}
-
-        {/* Section Header Row */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">
-          <div className="flex items-baseline gap-2.5">
-            <h2 className="text-section-title text-text font-semibold">
-              Requirements
-            </h2>
-            <span className="text-sm text-muted">
-              {rows.length} requirement{rows.length === 1 ? '' : 's'} · {mandatoryCount} mandatory
-            </span>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2.5">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleAddRow}
-              disabled={saving || rerunning}
-              className="gap-1.5"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Add requirement</span>
-            </Button>
-
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleClickRerunExtraction}
-              disabled={saving || rerunning}
-              className="gap-1.5"
-            >
-              <RefreshCw className="w-3.5 h-3.5" />
-              <span>{rerunning ? 'Starting...' : 'Re-run extraction'}</span>
-            </Button>
-
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleSave}
-              disabled={!canSave}
-              className="font-semibold"
-            >
-              {saving ? 'Saving...' : 'Save changes'}
-            </Button>
-
-            {/* Run Analysis Action */}
-            <div className="flex flex-col items-end">
-              <div className="flex items-center gap-2">
-                {jobActive && (
-                  <div className="flex items-center gap-1.5 text-xs text-muted">
-                    <RefreshCw className="w-3.5 h-3.5 animate-spin text-accent" />
-                    <span>{latestJob?.step_label || 'Analysing...'}</span>
-                  </div>
-                )}
-                {isDirty ? (
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <span tabIndex={0} className="inline-block">
-                        <Button
-                          variant="primary"
-                          size="sm"
-                          disabled={true}
-                          className="gap-1.5 font-semibold"
-                        >
-                          <span>Run analysis</span>
-                        </Button>
-                      </span>
-                    </TooltipTrigger>
-                    <TooltipContent>Save your changes first</TooltipContent>
-                  </Tooltip>
-                ) : (
-                  <Button
-                    variant="primary"
-                    size="sm"
-                    disabled={jobActive || startingAnalysis || saving || rerunning}
-                    onClick={handleClickRunAnalysis}
-                    className="gap-1.5 font-semibold"
-                  >
-                    <span>Run analysis</span>
-                  </Button>
-                )}
-              </div>
-              {analyseError && (
-                <p className="text-xs text-status-noncompliant-text mt-1 text-right">
-                  {analyseError}
-                </p>
-              )}
-              {latestJob?.status === 'failed' && !jobActive && (
-                <div className="flex items-center gap-2 text-xs text-status-noncompliant-text mt-1">
-                  <span>{latestJob.error_message || 'Analysis failed.'}</span>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() =>
-                      startAnalysis(
-                        hasResults ||
-                          evaluation?.status === 'analysed' ||
-                          evaluation?.status === 'stale'
-                      )
-                    }
-                    className="h-6 px-2 text-xs text-text"
-                  >
-                    Try again
-                  </Button>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
 
         {/* Empty State or Requirements Table */}
         {rows.length === 0 ? (
