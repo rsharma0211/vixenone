@@ -166,6 +166,54 @@ class Document(Base):
     )
 
     evaluation = relationship("Evaluation", back_populates="documents")
+    pages = relationship(
+        "DocumentPage",
+        back_populates="document",
+        cascade="all, delete-orphan",
+        order_by="DocumentPage.page_number",
+    )
+
+
+class DocumentPage(Base):
+    __tablename__ = "document_pages"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+        server_default=func.gen_random_uuid(),
+    )
+    document_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("documents.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    page_number: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+    )
+    text: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+    document = relationship("Document", back_populates="pages")
+
+    __table_args__ = (
+        UniqueConstraint("document_id", "page_number", name="uq_document_pages_doc_page"),
+    )
 
 
 class Requirement(Base):

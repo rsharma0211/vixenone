@@ -1,6 +1,6 @@
 from typing import Any, Dict, List, Optional
 import uuid
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Response, UploadFile, status
+from fastapi import APIRouter, Body, Depends, File, Form, HTTPException, Response, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth import AuthenticatedUser, get_current_user
@@ -14,9 +14,11 @@ from app.schemas.evaluation import (
     EvaluationResultsResponse,
     EvaluationsListResponse,
     EvaluationUpdate,
+    ExtractRequirementsRequest,
     RequirementItem,
 )
 from app.services.evaluation_service import EvaluationService
+from app.services.job_launcher import JobLauncher, get_job_launcher
 from app.services.user_service import UserService
 
 router = APIRouter(prefix="/api/evaluations", tags=["evaluations"])
@@ -157,6 +159,29 @@ async def replace_requirements(
             detail=f"Evaluation {id} not found",
         )
     return [RequirementItem.model_validate(r) for r in reqs]
+
+
+@router.post(
+    "/{id}/extract",
+    response_model=AnalysisJobResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def extract_requirements(
+    id: uuid.UUID,
+    payload: Optional[ExtractRequirementsRequest] = Body(default=None),
+    current_user: AuthenticatedUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    launcher: JobLauncher = Depends(get_job_launcher),
+) -> AnalysisJobResponse:
+    user = await UserService.get_or_create_profile(db, current_user)
+    confirm_replace = payload.confirm_replace if payload is not None else False
+    return await EvaluationService.start_extraction(
+        session=db,
+        user_id=user.id,
+        evaluation_id=id,
+        confirm_replace=confirm_replace,
+        launcher=launcher,
+    )
 
 
 @router.get("/{id}/jobs/latest", response_model=Optional[AnalysisJobResponse])

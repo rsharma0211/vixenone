@@ -91,6 +91,10 @@ class EvaluationUpdate(BaseModel):
     status: Optional[EvaluationStatus] = None
 
 
+class ExtractRequirementsRequest(BaseModel):
+    confirm_replace: bool = False
+
+
 # --- Response models ---
 
 class VendorResponse(BaseModel):
@@ -145,6 +149,8 @@ class AnalysisJobResponse(BaseModel):
     error_message: Optional[str] = None
     started_at: datetime
     finished_at: Optional[datetime] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)
 

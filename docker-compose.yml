@@ -57,6 +57,7 @@ services:
     volumes:
       - ./backend:/app
       - ./uploads:/app/uploads
+      - ./dataset:/app/dataset:ro
     environment:
       - PROJECT_NAME=${PROJECT_NAME:-VixenOne}
       - ENV=${ENV:-development}

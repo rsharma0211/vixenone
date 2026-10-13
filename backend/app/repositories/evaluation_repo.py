@@ -277,11 +277,45 @@ class EvaluationRepository:
         stmt = (
             select(AnalysisJob)
             .where(AnalysisJob.evaluation_id == evaluation_id)
-            .order_by(desc(AnalysisJob.started_at))
+            .order_by(desc(AnalysisJob.started_at), desc(AnalysisJob.created_at))
             .limit(1)
         )
         res = await session.execute(stmt)
         return res.scalar_one_or_none()
+
+    @staticmethod
+    async def has_active_job(
+        session: AsyncSession, evaluation_id: uuid.UUID
+    ) -> bool:
+        stmt = (
+            select(func.count(AnalysisJob.id))
+            .where(
+                AnalysisJob.evaluation_id == evaluation_id,
+                AnalysisJob.status.in_(["queued", "extracting", "analysing"]),
+            )
+        )
+        res = await session.execute(stmt)
+        count = res.scalar() or 0
+        return count > 0
+
+    @staticmethod
+    async def create_job(
+        session: AsyncSession,
+        evaluation_id: uuid.UUID,
+        kind: str,
+        step_label: str = "",
+    ) -> AnalysisJob:
+        job = AnalysisJob(
+            id=uuid.uuid4(),
+            evaluation_id=evaluation_id,
+            kind=kind,
+            status="queued",
+            step_label=step_label,
+        )
+        session.add(job)
+        await session.commit()
+        await session.refresh(job)
+        return job
 
     @staticmethod
     async def get_results_data(

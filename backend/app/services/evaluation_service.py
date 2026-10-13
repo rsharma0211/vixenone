@@ -23,6 +23,7 @@ from app.schemas.evaluation import (
     VendorTotalResult,
 )
 from app.services.document_validator import validate_document_content
+from app.services.job_launcher import JobLauncher
 from app.services.scoring import compute_vendor_scores, round_half_up
 from app.services.storage import StorageService, get_storage
 
@@ -112,6 +113,12 @@ class EvaluationService:
                 detail=f"Evaluation {evaluation_id} not found",
             )
 
+        if await EvaluationRepository.has_active_job(session, evaluation_id):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Cannot upload documents while a job is active for this evaluation",
+            )
+
         if kind not in ("requirements", "proposal"):
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -190,12 +197,69 @@ class EvaluationService:
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Document {doc_id} not found",
             )
+        if await EvaluationRepository.has_active_job(session, evaluation_id):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Cannot delete documents while a job is active for this evaluation",
+            )
         storage_service = storage or get_storage()
         try:
             await storage_service.delete(doc.storage_key)
         except Exception:
             pass
         await EvaluationRepository.delete_document(session, doc)
+
+    @staticmethod
+    async def start_extraction(
+        session: AsyncSession,
+        user_id: uuid.UUID,
+        evaluation_id: uuid.UUID,
+        confirm_replace: bool,
+        launcher: JobLauncher,
+    ) -> AnalysisJobResponse:
+        eval_obj = await EvaluationRepository.get_by_id(session, user_id, evaluation_id)
+        if not eval_obj:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Evaluation {evaluation_id} not found",
+            )
+
+        if await EvaluationRepository.has_active_job(session, evaluation_id):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="A job is already active for this evaluation",
+            )
+
+        docs = eval_obj.documents or []
+        has_req_doc = any(d.kind == "requirements" for d in docs)
+        vendors = eval_obj.vendors or []
+        proposal_vendor_ids = {
+            d.vendor_id for d in docs if d.kind == "proposal" and d.vendor_id is not None
+        }
+        missing_vendors = [v.name for v in vendors if v.id not in proposal_vendor_ids]
+
+        if not has_req_doc or not vendors or missing_vendors:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Requirements document and a proposal for every vendor are required before extraction",
+            )
+
+        reqs = eval_obj.requirements or []
+        if not confirm_replace and any(r.origin == "user" for r in reqs):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="User-edited requirements exist and edits will be replaced. Confirm replacement to proceed.",
+            )
+
+        job = await EvaluationRepository.create_job(
+            session=session,
+            evaluation_id=evaluation_id,
+            kind="extract_requirements",
+            step_label="Queued",
+        )
+        await launcher.launch(job.id)
+        await session.refresh(job)
+        return AnalysisJobResponse.model_validate(job)
 
     @staticmethod
     async def delete_evaluation(
