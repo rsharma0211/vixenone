@@ -12,6 +12,7 @@ import {
   ShieldCheck,
   ChevronLeft,
   ChevronRight,
+  ArrowUp,
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { ROLE_LABELS } from '@/lib/auth/roles';
@@ -120,6 +121,15 @@ export const LandingPage: React.FC = () => {
   const { user } = useAuth();
   const prefersReducedMotion = usePrefersReducedMotion();
 
+  // Sticky header scrolled state
+  const [isScrolled, setIsScrolled] = useState<boolean>(false);
+
+  // Back to top button visibility state (1 viewport height scrolled)
+  const [showBackToTop, setShowBackToTop] = useState<boolean>(false);
+
+  // Top anchor ref for accessible focus management
+  const topRef = useRef<HTMLDivElement>(null);
+
   // Active section for scroll spy
   const [activeSection, setActiveSection] = useState<string>('');
 
@@ -127,7 +137,7 @@ export const LandingPage: React.FC = () => {
     document.title = 'VixenOne';
   }, []);
 
-  // Scroll spy effect
+  // Scroll spy, sticky header shadow, and back-to-top visibility effect
   useEffect(() => {
     const sectionIds = [
       'how-it-works',
@@ -140,7 +150,11 @@ export const LandingPage: React.FC = () => {
     ];
 
     const handleScroll = () => {
-      const scrollPosition = window.scrollY + 120; // 64px header + offset
+      const scrollY = window.scrollY;
+      setIsScrolled(scrollY > 0);
+      setShowBackToTop(scrollY >= window.innerHeight);
+
+      const scrollPosition = scrollY + 120; // 64px header + offset
 
       for (let i = sectionIds.length - 1; i >= 0; i--) {
         const id = sectionIds[i];
@@ -173,6 +187,36 @@ export const LandingPage: React.FC = () => {
         top: offsetPosition,
         behavior: prefersReducedMotion ? 'auto' : 'smooth',
       });
+    }
+  };
+
+  const scrollToTop = () => {
+    window.scrollTo({
+      top: 0,
+      behavior: prefersReducedMotion ? 'auto' : 'smooth',
+    });
+
+    const setFocusToTop = () => {
+      if (topRef.current) {
+        topRef.current.focus({ preventScroll: true });
+      }
+    };
+
+    if (prefersReducedMotion || window.scrollY === 0) {
+      setFocusToTop();
+    } else {
+      let focused = false;
+      const onScrollEnd = () => {
+        if (!focused) {
+          focused = true;
+          window.removeEventListener('scrollend', onScrollEnd);
+          setFocusToTop();
+        }
+      };
+      window.addEventListener('scrollend', onScrollEnd, { once: true });
+      setTimeout(() => {
+        onScrollEnd();
+      }, 500);
     }
   };
 
@@ -224,8 +268,14 @@ export const LandingPage: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-background text-text flex flex-col overflow-x-hidden">
+      <div ref={topRef} tabIndex={-1} className="outline-none" aria-hidden="true" />
       {/* 1. STICKY HEADER */}
-      <header className="sticky top-0 z-50 h-16 w-full border-b border-border bg-background">
+      <header
+        className={cn(
+          'sticky top-0 z-50 h-16 w-full bg-background border-b border-border transition-shadow duration-200',
+          isScrolled && 'shadow-sm'
+        )}
+      >
         <div className="max-w-7xl mx-auto h-full px-4 sm:px-6 lg:px-8 flex items-center justify-between">
           {/* Logo */}
           <Link
@@ -734,7 +784,7 @@ export const LandingPage: React.FC = () => {
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <Reveal delay={0} reducedMotion={prefersReducedMotion}>
-              <div className="rounded-lg border border-border bg-background p-6 flex flex-col justify-between space-y-6 h-full transition-all duration-200 hover:-translate-y-[2px] hover:border-slate-300 motion-reduce:hover:translate-y-0">
+              <div className="rounded-lg border border-border bg-background p-6 pr-14 sm:pr-6 flex flex-col justify-between space-y-6 h-full transition-all duration-200 hover:-translate-y-[2px] hover:border-slate-300 motion-reduce:hover:translate-y-0">
                 <div className="space-y-2">
                   <h3 className="text-base font-semibold text-text">Per evaluation</h3>
                   <p className="text-sm text-muted">₹499 per evaluation + GST</p>
@@ -750,7 +800,7 @@ export const LandingPage: React.FC = () => {
             </Reveal>
 
             <Reveal delay={60} reducedMotion={prefersReducedMotion}>
-              <div className="rounded-lg border border-border bg-background p-6 flex flex-col justify-between space-y-6 h-full transition-all duration-200 hover:-translate-y-[2px] hover:border-slate-300 motion-reduce:hover:translate-y-0">
+              <div className="rounded-lg border border-border bg-background p-6 pr-14 sm:pr-6 flex flex-col justify-between space-y-6 h-full transition-all duration-200 hover:-translate-y-[2px] hover:border-slate-300 motion-reduce:hover:translate-y-0">
                 <div className="space-y-2">
                   <h3 className="text-base font-semibold text-text">Monthly</h3>
                   <p className="text-sm text-muted">₹999 per month + GST</p>
@@ -767,7 +817,7 @@ export const LandingPage: React.FC = () => {
             </Reveal>
 
             <Reveal delay={120} reducedMotion={prefersReducedMotion}>
-              <div className="rounded-lg border border-border bg-background p-6 flex flex-col justify-between space-y-6 h-full transition-all duration-200 hover:-translate-y-[2px] hover:border-slate-300 motion-reduce:hover:translate-y-0">
+              <div className="rounded-lg border border-border bg-background p-6 pr-14 sm:pr-6 flex flex-col justify-between space-y-6 h-full transition-all duration-200 hover:-translate-y-[2px] hover:border-slate-300 motion-reduce:hover:translate-y-0">
                 <div className="space-y-2">
                   <h3 className="text-base font-semibold text-text">Enterprise</h3>
                   <p className="text-sm text-muted">Contact us</p>
@@ -924,12 +974,12 @@ export const LandingPage: React.FC = () => {
       </main>
 
       {/* 9. FOOTER */}
-      <footer className="border-t border-border bg-background py-8">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between">
+      <footer className="border-t border-border bg-background py-8 pb-20 sm:pb-8">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center sm:justify-between gap-4">
           <div className="flex items-center select-none">
             <img src="/logo.png" alt="VixenOne" className="h-10 w-auto max-w-full object-contain" />
           </div>
-          <p className="text-xs text-muted">
+          <p className="text-xs text-muted pr-14 sm:pr-0">
             Powered by{' '}
             <a
               href="https://webitmore.com"
@@ -942,6 +992,26 @@ export const LandingPage: React.FC = () => {
           </p>
         </div>
       </footer>
+
+      {/* 10. BACK TO TOP BUTTON */}
+      <button
+        type="button"
+        onClick={scrollToTop}
+        aria-label="Back to top"
+        className={cn(
+          'fixed bottom-6 right-4 sm:right-6 z-40',
+          'flex h-10 w-10 items-center justify-center rounded-full',
+          'bg-background border border-border text-navy shadow-sm',
+          'hover:bg-surface transition-all duration-200',
+          'focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
+          'print:hidden',
+          showBackToTop
+            ? 'opacity-100 translate-y-0 pointer-events-auto visible'
+            : 'opacity-0 translate-y-2 pointer-events-none invisible'
+        )}
+      >
+        <ArrowUp className="h-5 w-5 text-navy" aria-hidden="true" />
+      </button>
     </div>
   );
 };
