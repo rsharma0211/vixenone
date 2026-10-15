@@ -147,6 +147,7 @@ export const LandingPage: React.FC = () => {
       'pricing',
       'coming-soon',
       'faq',
+      'contact',
     ];
 
     const handleScroll = () => {
@@ -296,6 +297,7 @@ export const LandingPage: React.FC = () => {
               { id: 'pricing', label: 'Pricing' },
               { id: 'coming-soon', label: 'Coming soon' },
               { id: 'faq', label: 'FAQ' },
+              { id: 'contact', label: 'Contact' },
             ].map(({ id, label }) => {
               const isActive = activeSection === id;
               return (
@@ -822,8 +824,12 @@ export const LandingPage: React.FC = () => {
                   <h3 className="text-base font-semibold text-text">Enterprise</h3>
                   <p className="text-sm text-muted">Contact us</p>
                 </div>
-                <Button variant="primary" asChild className="w-full">
-                  <a href="mailto:hello@webitmore.com">Contact us</a>
+                <Button
+                  variant="primary"
+                  className="w-full"
+                  onClick={() => scrollToSection('contact')}
+                >
+                  Contact us
                 </Button>
               </div>
             </Reveal>
@@ -950,22 +956,32 @@ export const LandingPage: React.FC = () => {
           </Reveal>
         </section>
 
-        {/* 8. FINAL CTA CARD */}
-        <section className="py-12 px-4 sm:px-6 lg:px-8">
+        {/* 8. CONTACT */}
+        <section id="contact" className="py-12 px-4 sm:px-6 lg:px-8 scroll-mt-[72px]">
           <div className="max-w-4xl mx-auto">
             <Reveal delay={0} reducedMotion={prefersReducedMotion}>
               <div className="rounded-2xl border border-accent/20 bg-accent-tint/60 p-10 sm:p-14 text-center space-y-6 shadow-sm">
-                <h2 className="text-2xl sm:text-3xl font-bold text-text tracking-tight">
-                  Ready to compare your next proposals?
-                </h2>
-                <div>
-                  <Button
-                    variant="primary"
-                    size="lg"
-                    onClick={() => navigate('/sign-up')}
-                  >
-                    Sign up
-                  </Button>
+                <div className="space-y-2">
+                  <h2 className="text-2xl sm:text-3xl font-bold text-text tracking-tight">
+                    Contact us
+                  </h2>
+                  <p className="text-sm sm:text-base text-muted">
+                    Questions, a demo, or an Enterprise plan — write to us.
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <div>
+                    <Button
+                      variant="primary"
+                      size="lg"
+                      asChild
+                    >
+                      <a href="mailto:hello@webitmore.com">Email us</a>
+                    </Button>
+                  </div>
+                  <p className="text-sm text-muted select-text">
+                    hello@webitmore.com
+                  </p>
                 </div>
               </div>
             </Reveal>
