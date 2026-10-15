@@ -315,11 +315,17 @@ Read all three at the start of every task.
 ## 12. Execution and verification (mandatory)
 
 - Execute directly. No plan document, no approval step, unless the prompt says "plan first".
-- Build and type-check once at the end of the task, not after every edit.
+- Grep first and open only the matched lines. Do not read whole files.
+- Type-check once at the end of the task, not after every edit.
+- Never run a production web build in a task. Production builds happen only in make deploy. Web tasks verify with type-check only.
+- Api tasks: run only affected tests while working, then the full test suite once at the end.
 - No browser automation, no headless Chrome, no screenshots. The human does UI checks manually.
 - Verify only with: unit/integration tests, type-check, lint, curl against running services, grep.
 - If a check fails, fix and re-run that check only. Stop after 3 failed attempts and report.
-- Commit only files this task created or changed, listed explicitly. Never stage everything.
-- Two lanes may run in parallel: api container and frontend container. Never edit files in the other lane's container.
+- Commit only files this task created or changed, listed explicitly. Never stage everything. If git reports a lock, wait 30 seconds and retry, up to 3 times.
+- Never revert files this task did not change; stop and report.
+- Two lanes may run in parallel: api container and frontend container. Never edit files in the other lane's container. While another lane is running, do not edit the Makefile, compose file, Docker images, rulebook or docs, and do not build, start, stop or restart containers.
 - Never edit files in the docs design folder. The design spec and screenshots are read-only inputs.
+- Do not update context docs in a task unless the prompt asks; docs are synced at phase end.
 - Seed and migrate only via Makefile targets.
+- Never run any command that changes cloud resources. The human runs deploys.
