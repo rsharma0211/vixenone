@@ -179,7 +179,7 @@ export const LandingPage: React.FC = () => {
   const scrollToSection = (id: string) => {
     const element = document.getElementById(id);
     if (element) {
-      const headerOffset = 64;
+      const headerOffset = 72;
       const elementPosition = element.getBoundingClientRect().top;
       const offsetPosition = elementPosition + window.scrollY - headerOffset;
 
@@ -267,7 +267,7 @@ export const LandingPage: React.FC = () => {
   const [roleIndex, setRoleIndex] = useState(0);
 
   return (
-    <div className="min-h-screen bg-background text-text flex flex-col overflow-x-hidden">
+    <div className="min-h-screen bg-background text-text flex flex-col overflow-x-clip">
       <div ref={topRef} tabIndex={-1} className="outline-none" aria-hidden="true" />
       {/* 1. STICKY HEADER */}
       <header
@@ -490,7 +490,7 @@ export const LandingPage: React.FC = () => {
         </section>
 
         {/* 2. HOW IT WORKS */}
-        <section id="how-it-works" className="bg-surface py-20 border-y border-border scroll-mt-16">
+        <section id="how-it-works" className="bg-surface py-20 border-y border-border scroll-mt-[72px]">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-10">
             <Reveal delay={0} reducedMotion={prefersReducedMotion}>
               <div className="space-y-2">
@@ -553,7 +553,7 @@ export const LandingPage: React.FC = () => {
         </section>
 
         {/* 3. FEATURES */}
-        <section id="features" className="py-20 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-10 scroll-mt-16">
+        <section id="features" className="py-20 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-10 scroll-mt-[72px]">
           <Reveal delay={0} reducedMotion={prefersReducedMotion}>
             <div className="space-y-2">
               <span className="text-navy text-xs font-semibold tracking-wider uppercase block">
@@ -618,7 +618,7 @@ export const LandingPage: React.FC = () => {
         </section>
 
         {/* 4. SHOWCASE */}
-        <section id="showcase" className="bg-surface py-20 border-y border-border scroll-mt-16">
+        <section id="showcase" className="bg-surface py-20 border-y border-border scroll-mt-[72px]">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
             <Reveal delay={0} reducedMotion={prefersReducedMotion}>
               <div className="text-center space-y-2">
@@ -673,7 +673,7 @@ export const LandingPage: React.FC = () => {
         </section>
 
         {/* 5. WHO IT'S FOR */}
-        <section id="who-its-for" className="py-20 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-10 scroll-mt-16">
+        <section id="who-its-for" className="py-20 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-10 scroll-mt-[72px]">
           <Reveal delay={0} reducedMotion={prefersReducedMotion}>
             <div className="space-y-2">
               <span className="text-navy text-xs font-semibold tracking-wider uppercase block">
@@ -773,7 +773,7 @@ export const LandingPage: React.FC = () => {
         </section>
 
         {/* PRICING */}
-        <section id="pricing" className="py-20 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8 scroll-mt-16">
+        <section id="pricing" className="py-20 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8 scroll-mt-[72px]">
           <Reveal delay={0} reducedMotion={prefersReducedMotion}>
             <div className="space-y-2">
               <h2 className="text-2xl sm:text-3xl font-bold text-text tracking-tight">
@@ -831,7 +831,7 @@ export const LandingPage: React.FC = () => {
         </section>
 
         {/* COMING SOON */}
-        <section id="coming-soon" className="bg-surface py-20 border-y border-border scroll-mt-16">
+        <section id="coming-soon" className="bg-surface py-20 border-y border-border scroll-mt-[72px]">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
             <Reveal delay={0} reducedMotion={prefersReducedMotion}>
               <div className="space-y-2">
@@ -888,7 +888,7 @@ export const LandingPage: React.FC = () => {
         </section>
 
         {/* 7. FAQ */}
-        <section id="faq" className="py-20 max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8 scroll-mt-16">
+        <section id="faq" className="py-20 max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8 scroll-mt-[72px]">
           <Reveal delay={0} reducedMotion={prefersReducedMotion}>
             <div className="space-y-2">
               <span className="text-navy text-xs font-semibold tracking-wider uppercase block">
