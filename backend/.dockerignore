@@ -33,5 +33,8 @@ uploads/
 .gitignore
 .gitattributes
 
+# Dev tooling
+dev/
+
 # Test pack dataset must be included
 !dataset

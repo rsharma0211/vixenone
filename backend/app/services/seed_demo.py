@@ -1,4 +1,5 @@
 import io
+import json
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, cast
@@ -507,6 +508,15 @@ async def seed_demo_data(
             finished_at=datetime(2026, 10, 12, 10, 4, 30, tzinfo=timezone.utc),
         ))
 
+        # Load frozen outputs
+        frozen_fixtures_path = dataset_base / "frozen_evaluations.json"
+        if not frozen_fixtures_path.is_file():
+            raise RuntimeError(
+                f"Frozen evaluations fixture missing: {frozen_fixtures_path}. Run live capture first."
+            )
+        with open(frozen_fixtures_path, "r", encoding="utf-8") as f:
+            frozen_data = json.load(f)
+
         # Evaluation 2: Requirements review (Security -> Powai Campus)
         eval_2 = Evaluation(
             id=uuid.UUID("11111111-2222-1111-1111-111111111111"),
@@ -521,42 +531,86 @@ async def seed_demo_data(
         )
         session.add(eval_2)
         await session.flush()
-        session.add(Vendor(id=uuid.uuid4(), evaluation_id=eval_2.id, name="SecureShield Guards", position=0))
-        session.add(Vendor(id=uuid.uuid4(), evaluation_id=eval_2.id, name="Apex Patrol Services", position=1))
 
-        eval_2_req_defs = [
-            ("REQ-01", "Security coverage", True, "Trained guards on duty 24×7 at all three campus gates.", "Duty roster shows continuous cover at each gate.", 0),
-            ("REQ-02", "Compliance", True, "Agency holds a valid private security agency licence for Maharashtra.", "Copy of current licence attached.", 1),
-            ("REQ-03", "Supervision", True, "One security supervisor on site for every shift.", "Supervisor named in the shift roster.", 2),
-            ("REQ-04", "Operations", True, "Visitor log maintained at reception for every entry and exit.", "Register or digital log described.", 3),
-            ("REQ-05", "Training", False, "Guards complete fire-safety training within 30 days of deployment.", "Training plan with timeline.", 4),
-            ("REQ-06", "Reporting", False, "Monthly incident report shared with the facilities manager.", "Report format and schedule stated.", 5),
+        v_secureshield = Vendor(
+            id=uuid.UUID("22222222-1111-2222-1111-111111111111"),
+            evaluation_id=eval_2.id,
+            name="SecureShield Guards",
+            position=0,
+        )
+        v_apex = Vendor(
+            id=uuid.UUID("22222222-2222-2222-1111-111111111111"),
+            evaluation_id=eval_2.id,
+            name="Apex Patrol Services",
+            position=1,
+        )
+        session.add_all([v_secureshield, v_apex])
+        await session.flush()
+
+        powai_docs_cfg = [
+            ("doc_rfp_powai", uuid.UUID("33333333-0000-2222-1111-111111111111"), None, "requirements", "RFP_Security_Powai.pdf", Path("requirements/05_Requirements_Powai_Security.pdf"), "requirements"),
+            ("doc_secureshield", uuid.UUID("33333333-1111-2222-1111-111111111111"), v_secureshield.id, "proposal", "SecureShield_Proposal.pdf", Path("proposals/06_SecureShield_Proposal.pdf"), "secureshield"),
+            ("doc_apex", uuid.UUID("33333333-2222-2222-1111-111111111111"), v_apex.id, "proposal", "Apex_Proposal.docx", Path("proposals/07_Apex_Proposal.docx"), "apex"),
         ]
-        for code, cat, mand, text, acc, pos in eval_2_req_defs:
+        powai_docs: Dict[str, Document] = {}
+        for key, doc_id, doc_vendor_id, kind, filename, rel_path, page_key in powai_docs_cfg:
+            content = (dataset_base / rel_path).read_bytes()
+            storage_key = f"evaluations/{eval_2.id}/{filename}"
+            await storage_service.save(storage_key, content)
+            _, mime, page_count = validate_document_content(content, filename)
+            doc_obj = Document(
+                id=doc_id,
+                evaluation_id=eval_2.id,
+                vendor_id=doc_vendor_id,
+                kind=kind,
+                filename=filename,
+                mime=mime,
+                size_bytes=len(content),
+                storage_key=storage_key,
+                page_count=page_count or 1,
+                status="ready",
+            )
+            session.add(doc_obj)
+            powai_docs[key] = doc_obj
+            for p in frozen_data["powai"]["pages"][page_key]:
+                session.add(
+                    DocumentPage(
+                        id=uuid.uuid5(uuid.NAMESPACE_DNS, f"vixenone.page.{doc_id}.{p['page_number']}"),
+                        document_id=doc_id,
+                        page_number=p["page_number"],
+                        text=p["text"],
+                    )
+                )
+        await session.flush()
+
+        doc_rfp_powai = powai_docs["doc_rfp_powai"]
+        for r in frozen_data["powai"]["requirements"]:
             session.add(
                 Requirement(
-                    id=uuid.uuid5(uuid.NAMESPACE_DNS, f"vixenone.eval2.req.{code}"),
+                    id=uuid.uuid5(uuid.NAMESPACE_DNS, f"vixenone.eval2.req.{r['code']}"),
                     evaluation_id=eval_2.id,
-                    code=code,
-                    text=text,
-                    category=cat,
-                    mandatory=mand,
-                    acceptance=acc,
-                    source_document_id=None,
-                    source_page=None,
-                    source_section=None,
-                    position=pos,
+                    code=r["code"],
+                    text=r["text"],
+                    category=r["category"],
+                    mandatory=r["mandatory"],
+                    acceptance=r["acceptance"],
+                    source_document_id=doc_rfp_powai.id,
+                    source_page=r["source_page"],
+                    source_section=r["source_section"],
+                    position=r["position"],
                     origin="extracted",
                 )
             )
 
+        # Powai: exactly one completed extraction job, no analysis results
         session.add(AnalysisJob(
-            id=uuid.uuid4(),
+            id=uuid.uuid5(uuid.NAMESPACE_DNS, "vixenone.eval2.job.extract"),
             evaluation_id=eval_2.id,
-            kind="analyse",
-            status="analysing",
-            step_label="Reading proposal — page 9 of 16",
-            started_at=datetime(2026, 10, 12, 11, 15, 0, tzinfo=timezone.utc),
+            kind="extract_requirements",
+            status="done",
+            step_label="Complete",
+            started_at=datetime(2026, 10, 10, 8, 0, 0, tzinfo=timezone.utc),
+            finished_at=datetime(2026, 10, 10, 8, 1, 30, tzinfo=timezone.utc),
         ))
 
         # Evaluation 3: Stale (Pantry -> BKC Office)
@@ -567,50 +621,185 @@ async def seed_demo_data(
             title="Pantry & Cafeteria — BKC Office",
             category="Facilities / Housekeeping",
             status="stale",
-            criteria_snapshot=None,
+            criteria_snapshot=criteria_snapshot,
             created_at=datetime(2026, 10, 8, 9, 0, 0, tzinfo=timezone.utc),
             updated_at=datetime(2026, 10, 8, 9, 21, 15, tzinfo=timezone.utc),
         )
         session.add(eval_3)
         await session.flush()
-        session.add(Vendor(id=uuid.uuid4(), evaluation_id=eval_3.id, name="FreshBite Caterers", position=0))
-        session.add(Vendor(id=uuid.uuid4(), evaluation_id=eval_3.id, name="Gourmet Pantry Co", position=1))
 
-        eval_3_req_defs = [
-            ("REQ-01", "Compliance", True, "Caterer holds a valid FSSAI licence.", "Copy of current licence attached.", 0),
-            ("REQ-02", "Service coverage", True, "Breakfast and lunch served Monday to Friday for up to 150 staff.", "Meal schedule and capacity stated.", 1),
-            ("REQ-03", "Hygiene", True, "Daily kitchen hygiene checklist signed by the supervisor.", "Checklist format described.", 2),
-            ("REQ-04", "Operations", False, "Weekly menu shared every Friday.", "Menu process stated.", 3),
-            ("REQ-05", "Service coverage", False, "Pantry tea and coffee stations refilled twice daily.", "Refill schedule stated.", 4),
+        v_freshbite = Vendor(
+            id=uuid.UUID("22222222-1111-3333-1111-111111111111"),
+            evaluation_id=eval_3.id,
+            name="FreshBite Caterers",
+            position=0,
+        )
+        v_gourmet = Vendor(
+            id=uuid.UUID("22222222-2222-3333-1111-111111111111"),
+            evaluation_id=eval_3.id,
+            name="Gourmet Pantry Co",
+            position=1,
+        )
+        session.add_all([v_freshbite, v_gourmet])
+        await session.flush()
+
+        pantry_docs_cfg = [
+            ("doc_rfp_pantry", uuid.UUID("33333333-0000-3333-1111-111111111111"), None, "requirements", "RFP_Pantry_BKC.pdf", Path("requirements/08_Requirements_Pantry_BKC.pdf"), "requirements"),
+            ("doc_freshbite", uuid.UUID("33333333-1111-3333-1111-111111111111"), v_freshbite.id, "proposal", "FreshBite_Proposal.docx", Path("proposals/09_FreshBite_Proposal.docx"), "freshbite"),
+            ("doc_gourmet", uuid.UUID("33333333-2222-3333-1111-111111111111"), v_gourmet.id, "proposal", "Gourmet_Proposal.pdf", Path("proposals/10_Gourmet_Proposal.pdf"), "gourmet"),
         ]
-        for code, cat, mand, text, acc, pos in eval_3_req_defs:
+        pantry_docs: Dict[str, Document] = {}
+        for key, doc_id, doc_vendor_id, kind, filename, rel_path, page_key in pantry_docs_cfg:
+            content = (dataset_base / rel_path).read_bytes()
+            storage_key = f"evaluations/{eval_3.id}/{filename}"
+            await storage_service.save(storage_key, content)
+            _, mime, page_count = validate_document_content(content, filename)
+            doc_obj = Document(
+                id=doc_id,
+                evaluation_id=eval_3.id,
+                vendor_id=doc_vendor_id,
+                kind=kind,
+                filename=filename,
+                mime=mime,
+                size_bytes=len(content),
+                storage_key=storage_key,
+                page_count=page_count or 1,
+                status="ready",
+            )
+            session.add(doc_obj)
+            pantry_docs[key] = doc_obj
+            for p in frozen_data["pantry"]["pages"][page_key]:
+                session.add(
+                    DocumentPage(
+                        id=uuid.uuid5(uuid.NAMESPACE_DNS, f"vixenone.page.{doc_id}.{p['page_number']}"),
+                        document_id=doc_id,
+                        page_number=p["page_number"],
+                        text=p["text"],
+                    )
+                )
+        await session.flush()
+
+        doc_rfp_pantry = pantry_docs["doc_rfp_pantry"]
+        pantry_req_map: Dict[str, Requirement] = {}
+        for r in frozen_data["pantry"]["requirements"]:
+            code = r["code"]
+            # REQ-02 text changed to "up to 175 staff" and marked user-origin
+            if code == "REQ-02":
+                text = "Breakfast and lunch Monday to Friday for up to 175 staff (mandatory)."
+                origin = "user"
+            else:
+                text = r["text"]
+                origin = "extracted"
+
+            r_id = uuid.uuid5(uuid.NAMESPACE_DNS, f"vixenone.eval3.req.{code}")
+            req_obj = Requirement(
+                id=r_id,
+                evaluation_id=eval_3.id,
+                code=code,
+                text=text,
+                category=r["category"],
+                mandatory=r["mandatory"],
+                acceptance=r["acceptance"],
+                source_document_id=doc_rfp_pantry.id,
+                source_page=r["source_page"],
+                source_section=r["source_section"],
+                position=r["position"],
+                origin=origin,
+            )
+            session.add(req_obj)
+            pantry_req_map[code] = req_obj
+        await session.flush()
+
+        # Pantry completed jobs only (no fake running/failed jobs)
+        session.add(AnalysisJob(
+            id=uuid.uuid5(uuid.NAMESPACE_DNS, "vixenone.eval3.job.extract"),
+            evaluation_id=eval_3.id,
+            kind="extract_requirements",
+            status="done",
+            step_label="Complete",
+            started_at=datetime(2026, 10, 8, 9, 0, 0, tzinfo=timezone.utc),
+            finished_at=datetime(2026, 10, 8, 9, 1, 15, tzinfo=timezone.utc),
+        ))
+        session.add(AnalysisJob(
+            id=uuid.uuid5(uuid.NAMESPACE_DNS, "vixenone.eval3.job.analyse"),
+            evaluation_id=eval_3.id,
+            kind="analyse",
+            status="done",
+            step_label="Complete",
+            started_at=datetime(2026, 10, 8, 9, 5, 0, tzinfo=timezone.utc),
+            finished_at=datetime(2026, 10, 8, 9, 8, 30, tzinfo=timezone.utc),
+        ))
+
+        # Pantry analysis results
+        pantry_analysis = frozen_data["pantry"]["analysis"]
+        for v_obj, v_key, doc_key in [
+            (v_freshbite, "freshbite", "doc_freshbite"),
+            (v_gourmet, "gourmet", "doc_gourmet"),
+        ]:
+            v_data = pantry_analysis[v_key]
+            v_doc = pantry_docs[doc_key]
+
+            for f_idx, f in enumerate(v_data["findings"]):
+                r_obj = pantry_req_map.get(f["code"]) if f.get("code") else None
+                finding_id = uuid.uuid5(uuid.NAMESPACE_DNS, f"vixenone.eval3.finding.{v_key}.{f_idx}")
+                session.add(
+                    Finding(
+                        id=finding_id,
+                        evaluation_id=eval_3.id,
+                        vendor_id=v_obj.id,
+                        requirement_id=r_obj.id if r_obj else None,
+                        criterion_key=f.get("criterion_key"),
+                        status=f["status"],
+                        needs_review=f["needs_review"],
+                        is_inference=f["is_inference"],
+                        confidence=f["confidence"],
+                        evidence_quote=f["evidence_quote"],
+                        evidence_document_id=v_doc.id if f["evidence_quote"] else None,
+                        evidence_page=f["evidence_page"],
+                        evidence_section=f["evidence_section"],
+                        risk_types=f["risk_types"],
+                        severity=f["severity"],
+                        clarification_question=f["clarification_question"],
+                    )
+                )
+
+            costs_data = v_data["costs"]
             session.add(
-                Requirement(
-                    id=uuid.uuid5(uuid.NAMESPACE_DNS, f"vixenone.eval3.req.{code}"),
+                CostBreakdown(
+                    id=uuid.uuid5(uuid.NAMESPACE_DNS, f"vixenone.eval3.cost.{v_key}"),
                     evaluation_id=eval_3.id,
-                    code=code,
-                    text=text,
-                    category=cat,
-                    mandatory=mand,
-                    acceptance=acc,
-                    source_document_id=None,
-                    source_page=None,
-                    source_section=None,
-                    position=pos,
-                    origin="extracted",
+                    vendor_id=v_obj.id,
+                    monthly_base=costs_data["monthly_base"],
+                    gst_18=costs_data["gst_18"],
+                    monthly_total=costs_data["monthly_total"],
+                    included=costs_data["included"],
+                    excluded=costs_data["excluded"],
+                    optional=costs_data["optional"],
+                    unknown=costs_data["unknown"],
                 )
             )
 
-        session.add(AnalysisJob(
-            id=uuid.uuid4(),
-            evaluation_id=eval_3.id,
-            kind="extract_requirements",
-            status="failed",
-            step_label="Failed during extraction",
-            error_message="PDF extraction failed: Corrupted document header on cafeteria_rates.pdf",
-            started_at=datetime(2026, 10, 8, 9, 20, 0, tzinfo=timezone.utc),
-            finished_at=datetime(2026, 10, 8, 9, 21, 15, tzinfo=timezone.utc),
-        ))
+            for c_key, c_score in v_data["scores"].items():
+                session.add(
+                    CriterionScore(
+                        id=uuid.uuid5(uuid.NAMESPACE_DNS, f"vixenone.eval3.score.{v_key}.{c_key}"),
+                        evaluation_id=eval_3.id,
+                        vendor_id=v_obj.id,
+                        criterion_key=c_key,
+                        score=c_score,
+                    )
+                )
+
+            for q_idx, q_text in enumerate(v_data["clarifications"]):
+                session.add(
+                    Clarification(
+                        id=uuid.uuid5(uuid.NAMESPACE_DNS, f"vixenone.eval3.clarif.{v_key}.{q_idx}"),
+                        evaluation_id=eval_3.id,
+                        vendor_id=v_obj.id,
+                        question=q_text,
+                        answered=False,
+                    )
+                )
 
         # Evaluation 4: Draft (Pest Control -> Thane Warehouse)
         eval_4 = Evaluation(
@@ -626,8 +815,47 @@ async def seed_demo_data(
         )
         session.add(eval_4)
         await session.flush()
-        session.add(Vendor(id=uuid.uuid4(), evaluation_id=eval_4.id, name="TermiGuard AMC", position=0))
-        session.add(Vendor(id=uuid.uuid4(), evaluation_id=eval_4.id, name="SafeClean Disinfection", position=1))
+
+        v_termiguard = Vendor(
+            id=uuid.UUID("22222222-1111-4444-1111-111111111111"),
+            evaluation_id=eval_4.id,
+            name="TermiGuard AMC",
+            position=0,
+        )
+        v_safeclean = Vendor(
+            id=uuid.UUID("22222222-2222-4444-1111-111111111111"),
+            evaluation_id=eval_4.id,
+            name="SafeClean Disinfection",
+            position=1,
+        )
+        session.add_all([v_termiguard, v_safeclean])
+        await session.flush()
+
+        # Thane: documents uploaded (not read), no requirements, no jobs, status draft
+        thane_docs_cfg = [
+            ("doc_rfp_thane", uuid.UUID("33333333-0000-4444-1111-111111111111"), None, "requirements", "RFP_PestControl_Thane.pdf", Path("requirements/11_Requirements_Thane_PestControl.pdf")),
+            ("doc_termiguard", uuid.UUID("33333333-1111-4444-1111-111111111111"), v_termiguard.id, "proposal", "TermiGuard_Proposal.pdf", Path("proposals/12_TermiGuard_Proposal.pdf")),
+            ("doc_safeclean", uuid.UUID("33333333-2222-4444-1111-111111111111"), v_safeclean.id, "proposal", "SafeClean_Proposal.docx", Path("proposals/13_SafeClean_Proposal.docx")),
+        ]
+        for key, doc_id, doc_vendor_id, kind, filename, rel_path in thane_docs_cfg:
+            content = (dataset_base / rel_path).read_bytes()
+            storage_key = f"evaluations/{eval_4.id}/{filename}"
+            await storage_service.save(storage_key, content)
+            _, mime, page_count = validate_document_content(content, filename)
+            session.add(
+                Document(
+                    id=doc_id,
+                    evaluation_id=eval_4.id,
+                    vendor_id=doc_vendor_id,
+                    kind=kind,
+                    filename=filename,
+                    mime=mime,
+                    size_bytes=len(content),
+                    storage_key=storage_key,
+                    page_count=page_count or 1,
+                    status="uploaded",
+                )
+            )
 
         await session.commit()
         print("Demo evaluations, vendors, findings, scores, costs, and jobs seeded successfully.")

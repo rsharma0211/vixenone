@@ -1,0 +1,448 @@
+{
+  "captured_at": "2026-10-15T16:20:24.696535+00:00",
+  "powai": {
+    "pages": {
+      "requirements": [
+        {
+          "page_number": 1,
+          "text": "Request for Proposal \u2014 Security Services\nPowai Campus \u00b7 Northbridge Properties Pvt Ltd\n\n1. Scope of Requirements\nNorthbridge Properties Pvt Ltd invites proposals from qualified private security agencies for round-the-clock physical security coverage across its Powai Campus facility. The requirements listed below define the mandatory and operational expectations.\n\nCode Requirement Mandatory Acceptance Criteria\nREQ-01 Trained guards 24\u00d77 at all three campus gates (mandatory). Yes Duty roster confirms 24\u00d77 guard deployment at Gates 1, 2, and 3.\nREQ-02 Valid private security agency licence for Maharashtra (mandatory). Yes Active PSARA licence copy for Maharashtra submitted.\nREQ-03 One security supervisor on site every shift (mandatory). Yes Designated supervisor deployed on site for every active shift.\nREQ-04 Visitor log at reception for every entry and exit (mandatory). Yes Visitor register or digital log maintained at reception for all visits.\nREQ-05 Fire-safety training within 30 days of deployment. No Guards complete certified fire-safety training within 30 days.\nREQ-06 Monthly incident report to the facilities manager. No Comprehensive incident report submitted monthly.\n\nFictional demo document"
+        }
+      ],
+      "secureshield": [
+        {
+          "page_number": 1,
+          "text": "SecureShield Guards \u2014 Technical & Commercial Proposal Security Services for Powai Campus \u00b7 Submitted to Northbridge Properties Pvt Ltd 1. Operational Deployment & Scope SecureShield Guards commits to deploying trained guards 24\u00d77 at all three campus gates. Continuous vigilance and physical security will be maintained across all campus entry and exit points. Our agency holds a valid private security agency licence for Maharashtra under registration number PSARA-MH-2023-F9876, valid to 2028. One dedicated security supervisor is stationed on site every shift to oversee guard operations and handle immediate escalations. A formal visitor register at reception is strictly maintained for every entry and exit. All deployed personnel undergo certified fire-safety training within 30 days of initial deployment. A detailed monthly incident report will be submitted directly to the facilities manager at the close of every month. 2. Commercial Terms Commercial Item Monthly Fee (INR) Monthly base security fee (all 3 gates 24\u00d77, supervisor every shift) \u25a03,20,000 GST @ 18% \u25a057,600 Total Monthly Billing \u25a03,77,600 The monthly rate of \u25a03,20,000 + GST includes all guard deployments, on-site supervision every shift, visitor register management, fire-safety training within 30 days, and monthly incident reporting. Fictional demo document"
+        }
+      ],
+      "apex": [
+        {
+          "page_number": 1,
+          "text": "Apex Patrol Services \u2014 Proposal for Security Services\nPowai Campus \u00b7 Prepared for Northbridge Properties Pvt Ltd\n## 1. Guard Coverage and Operations\nApex Patrol Services proposes guard coverage with Gates 1\u20132 manned 24\u00d77, while Gate 3 will have day shift only coverage.\nRegarding statutory compliance, our private security agency licence renewal applied for with the controlling authority.\nOn-site supervisory coverage includes day supervision; supervisor night shift on request.\nA visitor log maintained at reception for tracking building entries and exits.\nSpecialised guard fire-safety training is available on request, at additional cost.\nOperations will provide a quarterly incident report to client management.\n## 2. Commercial Quotation\nItem Description | Price (INR)\nBase security services fee | \u20b92,65,000/month + GST\nOvertime | at actuals\nFire-safety training | on request, at additional cost\nThe monthly base contract fee is \u20b92,65,000/month + GST. Any guard overtime beyond scheduled shift hours will be billed at actuals. Night shift supervision and fire-safety training are provided on request at additional cost."
+        }
+      ]
+    },
+    "requirements": [
+      {
+        "code": "REQ-01",
+        "text": "Trained guards 24\u00d77 at all three campus gates (mandatory).",
+        "category": "Physical Security",
+        "mandatory": true,
+        "acceptance": "Duty roster confirms 24\u00d77 guard deployment at Gates 1, 2, and 3.",
+        "source_page": 1,
+        "source_section": "1. Scope of Requirements",
+        "position": 0
+      },
+      {
+        "code": "REQ-02",
+        "text": "Valid private security agency licence for Maharashtra (mandatory).",
+        "category": "Compliance",
+        "mandatory": true,
+        "acceptance": "Active PSARA licence copy for Maharashtra submitted.",
+        "source_page": 1,
+        "source_section": "1. Scope of Requirements",
+        "position": 1
+      },
+      {
+        "code": "REQ-03",
+        "text": "One security supervisor on site every shift (mandatory).",
+        "category": "Staffing",
+        "mandatory": true,
+        "acceptance": "Designated supervisor deployed on site for every active shift.",
+        "source_page": 1,
+        "source_section": "1. Scope of Requirements",
+        "position": 2
+      },
+      {
+        "code": "REQ-04",
+        "text": "Visitor log at reception for every entry and exit (mandatory).",
+        "category": "Operations",
+        "mandatory": true,
+        "acceptance": "Visitor register or digital log maintained at reception for all visits.",
+        "source_page": 1,
+        "source_section": "1. Scope of Requirements",
+        "position": 3
+      },
+      {
+        "code": "REQ-05",
+        "text": "Fire-safety training within 30 days of deployment.",
+        "category": "Training",
+        "mandatory": false,
+        "acceptance": "Guards complete certified fire-safety training within 30 days.",
+        "source_page": 1,
+        "source_section": "1. Scope of Requirements",
+        "position": 4
+      },
+      {
+        "code": "REQ-06",
+        "text": "Monthly incident report to the facilities manager.",
+        "category": "Reporting",
+        "mandatory": false,
+        "acceptance": "Comprehensive incident report submitted monthly.",
+        "source_page": 1,
+        "source_section": "1. Scope of Requirements",
+        "position": 5
+      }
+    ]
+  },
+  "pantry": {
+    "pages": {
+      "requirements": [
+        {
+          "page_number": 1,
+          "text": "Request for Proposal \u2014 Pantry & Cafeteria Services\nBKC Office \u00b7 Northbridge Properties Pvt Ltd\n\n1. Requirements Specifications\nNorthbridge Properties Pvt Ltd requires a qualified catering and cafeteria partner to operate the corporate pantry and cafeteria at its BKC Office location. All catering operations must fulfill the requirements below.\n\nCode Requirement Mandatory Acceptance Criteria\nREQ-01 Valid FSSAI licence (mandatory). Yes Active FSSAI food business operating licence provided.\nREQ-02 Breakfast and lunch Monday to Friday for up to 150 staff (mandatory). Yes Daily breakfast and lunch service Mon\u2013Fri covering up to 150 personnel.\nREQ-03 Daily kitchen hygiene checklist signed by the supervisor (mandatory). Yes Checklist executed daily and signed by the catering supervisor.\nREQ-04 Weekly menu shared every Friday. No Planned menu circulated to facilities management every Friday.\nREQ-05 Tea and coffee stations refilled twice daily. No Beverage stations replenished at least twice per day.\n\nFictional demo document"
+        }
+      ],
+      "freshbite": [
+        {
+          "page_number": 1,
+          "text": "FreshBite Caterers \u2014 Pantry & Cafeteria Proposal\nBKC Office Catering \u00b7 Submitted to Northbridge Properties Pvt Ltd\n## 1. Operational Capabilities and Scope\nFreshBite Caterers holds an active food safety licence with FSSAI licence number stated: FSSAI-MH-2023-009876543210.\nWe provide full breakfast + lunch Mon\u2013Fri up to 150 staff at the corporate cafeteria. All meals are prepared fresh adhering to high quality and nutritional standards.\nOur kitchen team maintains a strict daily hygiene checklist signed by supervisor to ensure sanitation.\nA rotational weekly menu every Friday is circulated in advance to the facilities team.\nCorporate tea/coffee refilled twice daily across all designated pantry beverage points.\n## 2. Commercial Quotation\nService Component | Monthly Pricing (INR)\nBase cafeteria service fee (breakfast & lunch up to 150 staff) | \u20b92,10,000\nGST @ 18% | \u20b937,800\nTotal Monthly Fee | \u20b92,47,800\nCommercial fee is \u20b92,10,000/month + GST. All culinary raw materials included in the monthly fee. No additional charges apply."
+        }
+      ],
+      "gourmet": [
+        {
+          "page_number": 1,
+          "text": "Gourmet Pantry Co \u2014 Corporate Catering Proposal\nCafeteria & Pantry Services for BKC Office \u00b7 Northbridge Properties Pvt Ltd\n\n1. Service Specifications\nGourmet Pantry Co notes that statutory FSSAI registration in process under reference FSSAI-ACK-2026-00412.\nWe offer breakfast + lunch Mon\u2013Sat up to 120 staff. Service covers up to 120 staff members on site.\nKitchen cleanliness is audited via our weekly hygiene checklist.\nThe cafeteria meal menu shared monthly with the client representative.\nStandard tea/coffee refilled once daily, extra refills chargeable.\n\n2. Financial Proposal\n\nBilling Element Pricing (INR)\nMonthly cafeteria base fee (up to 120 staff) \u25a01,85,000\nGST @ 18% \u25a033,300\nTotal Base Billing \u25a02,18,300\nPlates beyond 120 at actuals\nExtra tea/coffee refills chargeable\n\nBase pricing is \u25a01,85,000/month + GST. Plates beyond 120 at actuals will be invoiced monthly. Extra tea and coffee refills beyond the once daily refill are chargeable.\n\nFictional demo document"
+        }
+      ]
+    },
+    "requirements": [
+      {
+        "id": "pantry-req-1",
+        "code": "REQ-01",
+        "text": "Valid FSSAI licence (mandatory).",
+        "category": "Compliance",
+        "mandatory": true,
+        "acceptance": "Active FSSAI food business operating licence provided.",
+        "source_page": 1,
+        "source_section": "1. Requirements Specifications",
+        "position": 0
+      },
+      {
+        "id": "pantry-req-2",
+        "code": "REQ-02",
+        "text": "Breakfast and lunch Monday to Friday for up to 150 staff (mandatory).",
+        "category": "Service",
+        "mandatory": true,
+        "acceptance": "Daily breakfast and lunch service Mon\u2013Fri covering up to 150 personnel.",
+        "source_page": 1,
+        "source_section": "1. Requirements Specifications",
+        "position": 1
+      },
+      {
+        "id": "pantry-req-3",
+        "code": "REQ-03",
+        "text": "Daily kitchen hygiene checklist signed by the supervisor (mandatory).",
+        "category": "Operations",
+        "mandatory": true,
+        "acceptance": "Checklist executed daily and signed by the catering supervisor.",
+        "source_page": 1,
+        "source_section": "1. Requirements Specifications",
+        "position": 2
+      },
+      {
+        "id": "pantry-req-4",
+        "code": "REQ-04",
+        "text": "Weekly menu shared every Friday.",
+        "category": "Service",
+        "mandatory": false,
+        "acceptance": "Planned menu circulated to facilities management every Friday.",
+        "source_page": 1,
+        "source_section": "1. Requirements Specifications",
+        "position": 3
+      },
+      {
+        "id": "pantry-req-5",
+        "code": "REQ-05",
+        "text": "Tea and coffee stations refilled twice daily.",
+        "category": "Service",
+        "mandatory": false,
+        "acceptance": "Beverage stations replenished at least twice per day.",
+        "source_page": 1,
+        "source_section": "1. Requirements Specifications",
+        "position": 4
+      }
+    ],
+    "analysis": {
+      "freshbite": {
+        "vendor_name": "FreshBite Caterers",
+        "mandatory_statuses": [
+          "Compliant",
+          "Compliant",
+          "Compliant"
+        ],
+        "findings": [
+          {
+            "code": "REQ-01",
+            "criterion_key": null,
+            "status": "Compliant",
+            "needs_review": false,
+            "is_inference": false,
+            "confidence": "High",
+            "evidence_quote": "FreshBite Caterers holds an active food safety licence with FSSAI licence number stated: FSSAI-MH-2023-009876543210.",
+            "evidence_page": 1,
+            "evidence_section": "1. Operational Capabilities and Scope",
+            "risk_types": [],
+            "severity": null,
+            "clarification_question": null
+          },
+          {
+            "code": "REQ-02",
+            "criterion_key": null,
+            "status": "Compliant",
+            "needs_review": false,
+            "is_inference": false,
+            "confidence": "High",
+            "evidence_quote": "We provide full breakfast + lunch Mon\u2013Fri up to 150 staff at the corporate cafeteria.",
+            "evidence_page": 1,
+            "evidence_section": "1. Operational Capabilities and Scope",
+            "risk_types": [],
+            "severity": null,
+            "clarification_question": null
+          },
+          {
+            "code": "REQ-03",
+            "criterion_key": null,
+            "status": "Compliant",
+            "needs_review": false,
+            "is_inference": false,
+            "confidence": "High",
+            "evidence_quote": "Our kitchen team maintains a strict daily hygiene checklist signed by supervisor to ensure sanitation.",
+            "evidence_page": 1,
+            "evidence_section": "1. Operational Capabilities and Scope",
+            "risk_types": [],
+            "severity": null,
+            "clarification_question": null
+          },
+          {
+            "code": "REQ-04",
+            "criterion_key": null,
+            "status": "Compliant",
+            "needs_review": false,
+            "is_inference": false,
+            "confidence": "High",
+            "evidence_quote": "A rotational weekly menu every Friday is circulated in advance to the facilities team.",
+            "evidence_page": 1,
+            "evidence_section": "1. Operational Capabilities and Scope",
+            "risk_types": [],
+            "severity": null,
+            "clarification_question": null
+          },
+          {
+            "code": "REQ-05",
+            "criterion_key": null,
+            "status": "Compliant",
+            "needs_review": false,
+            "is_inference": false,
+            "confidence": "High",
+            "evidence_quote": "Corporate tea/coffee refilled twice daily across all designated pantry beverage points.",
+            "evidence_page": 1,
+            "evidence_section": "1. Operational Capabilities and Scope",
+            "risk_types": [],
+            "severity": null,
+            "clarification_question": null
+          },
+          {
+            "code": null,
+            "criterion_key": "service_coverage",
+            "status": "Compliant",
+            "needs_review": false,
+            "is_inference": false,
+            "confidence": "High",
+            "evidence_quote": "We provide full breakfast + lunch Mon\u2013Fri up to 150 staff at the corporate cafeteria.",
+            "evidence_page": 1,
+            "evidence_section": "1. Operational Capabilities and Scope",
+            "risk_types": [],
+            "severity": null,
+            "clarification_question": null
+          },
+          {
+            "code": null,
+            "criterion_key": "sla_operational",
+            "status": "Partially compliant",
+            "needs_review": false,
+            "is_inference": false,
+            "confidence": "High",
+            "evidence_quote": "Our kitchen team maintains a strict daily hygiene checklist signed by supervisor to ensure sanitation.",
+            "evidence_page": 1,
+            "evidence_section": "1. Operational Capabilities and Scope",
+            "risk_types": [],
+            "severity": null,
+            "clarification_question": null
+          }
+        ],
+        "costs": {
+          "monthly_base": 210000,
+          "gst_18": 37800,
+          "monthly_total": 247800,
+          "included": [
+            "Base cafeteria service fee (breakfast & lunch up to 150 staff)",
+            "All culinary raw materials"
+          ],
+          "excluded": [],
+          "optional": [],
+          "unknown": []
+        },
+        "scores": {
+          "mandatory_compliance": 100,
+          "service_coverage": 100,
+          "cost_comparability": 100,
+          "sla_operational": 50,
+          "unresolved_risks": 100
+        },
+        "clarifications": []
+      },
+      "gourmet": {
+        "vendor_name": "Gourmet Pantry Co",
+        "mandatory_statuses": [
+          "Non-compliant",
+          "Partially compliant",
+          "Partially compliant"
+        ],
+        "findings": [
+          {
+            "code": "REQ-01",
+            "criterion_key": null,
+            "status": "Non-compliant",
+            "needs_review": false,
+            "is_inference": false,
+            "confidence": "High",
+            "evidence_quote": "Gourmet Pantry Co notes that statutory FSSAI registration in process under reference FSSAI-ACK-2026-00412.",
+            "evidence_page": 1,
+            "evidence_section": "1. Service Specifications",
+            "risk_types": [
+              "Omission"
+            ],
+            "severity": "High",
+            "clarification_question": "Will Gourmet Pantry Co obtain and provide an active, valid FSSAI operating licence prior to contract commencement?"
+          },
+          {
+            "code": "REQ-02",
+            "criterion_key": null,
+            "status": "Partially compliant",
+            "needs_review": false,
+            "is_inference": false,
+            "confidence": "High",
+            "evidence_quote": "We offer breakfast + lunch Mon\u2013Sat up to 120 staff.",
+            "evidence_page": 1,
+            "evidence_section": "1. Service Specifications",
+            "risk_types": [
+              "Exclusion",
+              "Unknown cost"
+            ],
+            "severity": "High",
+            "clarification_question": "Can the base headcount coverage be expanded to 150 staff within the fixed monthly base fee?"
+          },
+          {
+            "code": "REQ-03",
+            "criterion_key": null,
+            "status": "Partially compliant",
+            "needs_review": false,
+            "is_inference": false,
+            "confidence": "High",
+            "evidence_quote": "Kitchen cleanliness is audited via our weekly hygiene checklist.",
+            "evidence_page": 1,
+            "evidence_section": "1. Service Specifications",
+            "risk_types": [
+              "Exclusion"
+            ],
+            "severity": "Medium",
+            "clarification_question": "Can Gourmet Pantry Co commit to executing a daily kitchen hygiene checklist signed off by the supervisor?"
+          },
+          {
+            "code": "REQ-04",
+            "criterion_key": null,
+            "status": "Partially compliant",
+            "needs_review": false,
+            "is_inference": false,
+            "confidence": "High",
+            "evidence_quote": "The cafeteria meal menu shared monthly with the client representative.",
+            "evidence_page": 1,
+            "evidence_section": "1. Service Specifications",
+            "risk_types": [
+              "Exclusion"
+            ],
+            "severity": "Low",
+            "clarification_question": "Can the menu be shared weekly on Fridays instead of monthly?"
+          },
+          {
+            "code": "REQ-05",
+            "criterion_key": null,
+            "status": "Partially compliant",
+            "needs_review": false,
+            "is_inference": false,
+            "confidence": "High",
+            "evidence_quote": "Standard tea/coffee refilled once daily, extra refills chargeable.",
+            "evidence_page": 1,
+            "evidence_section": "1. Service Specifications",
+            "risk_types": [
+              "Exclusion",
+              "Unknown cost"
+            ],
+            "severity": "Medium",
+            "clarification_question": "Can Gourmet Pantry Co include a second daily refill for tea and coffee stations within the standard base fee?"
+          },
+          {
+            "code": null,
+            "criterion_key": "service_coverage",
+            "status": "Partially compliant",
+            "needs_review": false,
+            "is_inference": false,
+            "confidence": "High",
+            "evidence_quote": "We offer breakfast + lunch Mon\u2013Sat up to 120 staff.",
+            "evidence_page": 1,
+            "evidence_section": "1. Service Specifications",
+            "risk_types": [],
+            "severity": null,
+            "clarification_question": null
+          },
+          {
+            "code": null,
+            "criterion_key": "sla_operational",
+            "status": "Not evidenced",
+            "needs_review": false,
+            "is_inference": false,
+            "confidence": "High",
+            "evidence_quote": null,
+            "evidence_page": null,
+            "evidence_section": null,
+            "risk_types": [],
+            "severity": null,
+            "clarification_question": null
+          }
+        ],
+        "costs": {
+          "monthly_base": 185000,
+          "gst_18": 33300,
+          "monthly_total": 218300,
+          "included": [
+            "Breakfast and lunch service up to 120 staff members",
+            "Standard tea and coffee refilled once daily"
+          ],
+          "excluded": [
+            "Plates beyond 120 staff",
+            "Extra tea and coffee refills beyond once daily refill"
+          ],
+          "optional": [],
+          "unknown": [
+            "Plates beyond 120 staff",
+            "Extra tea/coffee refills"
+          ]
+        },
+        "scores": {
+          "mandatory_compliance": 33.33,
+          "service_coverage": 50,
+          "cost_comparability": 70,
+          "sla_operational": 0,
+          "unresolved_risks": 35
+        },
+        "clarifications": [
+          "Will Gourmet Pantry Co obtain and provide an active, valid FSSAI operating licence prior to contract commencement?",
+          "Can the base headcount coverage be expanded to 150 staff within the fixed monthly base fee?",
+          "Can Gourmet Pantry Co commit to executing a daily kitchen hygiene checklist signed off by the supervisor?",
+          "Can the menu be shared weekly on Fridays instead of monthly?",
+          "Can Gourmet Pantry Co include a second daily refill for tea and coffee stations within the standard base fee?"
+        ]
+      }
+    }
+  }
+}

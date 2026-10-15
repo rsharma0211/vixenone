@@ -2,6 +2,7 @@ from unittest.mock import patch
 import uuid
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import select
 
 from app.core.database import async_session
 from app.main import app
@@ -59,11 +60,11 @@ def test_demo_kpi_counts():
         assert resp.status_code == 200
         data = resp.json()
         kpis = data["kpis"]
-        # Expected: 4 / 2 / 1 / 4
+        # Expected: 4 / 2 / 1 / 9 (Andheri 4 + Pantry 5 = 9)
         assert kpis["total"] == 4, f"Expected total=4, got {kpis['total']}"
         assert kpis["needs_action"] == 2, f"Expected needs_action=2, got {kpis['needs_action']}"
         assert kpis["analysed"] == 1, f"Expected analysed=1, got {kpis['analysed']}"
-        assert kpis["open_clarifications"] == 4, f"Expected open_clarifications=4, got {kpis['open_clarifications']}"
+        assert kpis["open_clarifications"] == 9, f"Expected open_clarifications=9, got {kpis['open_clarifications']}"
 
 
 def test_demo_results_totals_and_points_raw_and_display():
@@ -187,24 +188,59 @@ def test_demo_seed_idempotent_security_and_pantry_requirements():
         assert [r["position"] for r in sec_reqs] == [0, 1, 2, 3, 4, 5]
         for r in sec_reqs:
             assert r["origin"] == "extracted"
-            assert r["source_document_id"] is None
-            assert r["source_page"] is None
-            assert r["source_section"] is None
+            assert r["source_document_id"] is not None
+            assert r["source_page"] == 1
+            assert r["source_section"] == "1. Scope of Requirements"
 
         pantry_reqs = client.get(f"/api/evaluations/{pantry_summary['id']}/requirements", headers=auth).json()
         assert len(pantry_reqs) == 5
         assert sum(1 for r in pantry_reqs if r["mandatory"]) == 3
         assert [r["code"] for r in pantry_reqs] == ["REQ-01", "REQ-02", "REQ-03", "REQ-04", "REQ-05"]
         assert [r["position"] for r in pantry_reqs] == [0, 1, 2, 3, 4]
+        # REQ-02 is user-edited to up to 175 staff
+        pantry_r2 = next(r for r in pantry_reqs if r["code"] == "REQ-02")
+        assert pantry_r2["origin"] == "user"
+        assert "175 staff" in pantry_r2["text"]
         for r in pantry_reqs:
-            assert r["origin"] == "extracted"
-            assert r["source_document_id"] is None
-            assert r["source_page"] is None
-            assert r["source_section"] is None
+            if r["code"] != "REQ-02":
+                assert r["origin"] == "extracted"
+            assert r["source_document_id"] is not None
+            assert r["source_page"] == 1
+            assert r["source_section"] == "1. Requirements Specifications"
 
-        # Ensure no fake documents were created on either evaluation
+        # Verify real documents are ready for Powai and Pantry
         sec_detail = client.get(f"/api/evaluations/{sec_summary['id']}", headers=auth).json()
         pantry_detail = client.get(f"/api/evaluations/{pantry_summary['id']}", headers=auth).json()
-        assert sec_detail["documents"] == []
-        assert pantry_detail["documents"] == []
+        assert len(sec_detail["documents"]) == 3
+        for d in sec_detail["documents"]:
+            assert d["status"] == "ready"
+            assert d["page_count"] is not None and d["page_count"] >= 1
+            assert d["size_bytes"] > 0
+
+        assert len(pantry_detail["documents"]) == 3
+        for d in pantry_detail["documents"]:
+            assert d["status"] == "ready"
+            assert d["page_count"] is not None and d["page_count"] >= 1
+            assert d["size_bytes"] > 0
+
+        # Verify Thane is draft with 3 uploaded documents (not read)
+        thane_summary = evals["Pest Control AMC — Thane Warehouse"]
+        assert thane_summary["status"] == "draft"
+        assert thane_summary["total_requirements"] == 0
+        thane_detail = client.get(f"/api/evaluations/{thane_summary['id']}", headers=auth).json()
+        assert len(thane_detail["documents"]) == 3
+        for d in thane_detail["documents"]:
+            assert d["status"] == "uploaded"
+            assert d["page_count"] is not None and d["page_count"] >= 1
+            assert d["size_bytes"] > 0
+
+        # Verify no seeded job is running or failed
+        async def verify_no_running_or_failed_jobs():
+            async with async_session() as s:
+                from app.models.evaluation import AnalysisJob
+                bad_jobs = list((await s.execute(
+                    select(AnalysisJob).where(AnalysisJob.status.in_(["extracting", "analysing", "failed"]))
+                )).scalars().all())
+                assert len(bad_jobs) == 0, f"Found unexpected running or failed jobs: {bad_jobs}"
+        asyncio.run(verify_no_running_or_failed_jobs())
 
