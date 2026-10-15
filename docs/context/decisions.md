@@ -81,5 +81,6 @@ Append-only record of architectural and implementation decisions. Format: `YYYY-
 - 2026-10-15 — Demo seed uploads real test-pack files into storage and seeds document pages — Re-running extraction and analysis on seeded evaluations succeeds cleanly without invented data or missing storage keys.
 - 2026-10-15 — Plain English storage error messages without internal paths — Missing or unreadable storage files return exact friendly messages ("This file is missing. Please upload it again." / "This file could not be read. Please upload it again.") with full details in server logs only.
 - 2026-10-15 — Single test-pack copy in backend/dataset and lean production image with .dockerignore — Consolidated test pack inside backend/dataset, eliminated root dataset copy and redundant compose mounts, and excluded tests, caches, virtualenvs, uploads, and env files from production image build while preserving test pack.
+- 2026-10-15 — Landing Coming soon card summaries with strict content lock — Added subtitle and one muted summary line per card in Coming soon section, maintaining equal row heights and responsive grid layout.
 
 

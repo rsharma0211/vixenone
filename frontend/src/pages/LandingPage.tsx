@@ -788,25 +788,48 @@ export const LandingPage: React.FC = () => {
                 <h2 className="text-2xl sm:text-3xl font-bold text-text tracking-tight">
                   Coming soon
                 </h2>
+                <p className="text-sm sm:text-base text-muted">
+                  What we're building next.
+                </p>
               </div>
             </Reveal>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {[
-                'Bidding — vendors bid against the RFQ',
-                'Vendor onboarding and background verification',
-                'Facility & Service Management',
-                'Disaster Management',
-                'Approval Matrix',
-                'AI chat feature',
+                {
+                  title: 'Bidding — vendors bid against the RFQ',
+                  summary: 'Vendors submit priced bids against your RFQ inside VixenOne.',
+                },
+                {
+                  title: 'Vendor onboarding and background verification',
+                  summary: 'Collect vendor documents and verify background before you engage.',
+                },
+                {
+                  title: 'Facility & Service Management',
+                  summary: 'Track day-to-day services once a vendor is appointed.',
+                },
+                {
+                  title: 'Disaster Management',
+                  summary: 'Plan and coordinate facility response during emergencies.',
+                },
+                {
+                  title: 'Approval Matrix',
+                  summary: 'Route recommendations to the right approvers by value and category.',
+                },
+                {
+                  title: 'AI chat feature',
+                  summary: 'Ask questions about your evaluations in plain English.',
+                },
               ].map((item, index) => (
                 <Reveal
-                  key={item}
+                  key={item.title}
                   delay={index * 60}
                   reducedMotion={prefersReducedMotion}
+                  className="h-full"
                 >
-                  <div className="rounded-lg border border-border bg-background p-6 h-full transition-all duration-200 hover:-translate-y-[2px] hover:border-slate-300 motion-reduce:hover:translate-y-0">
-                    <p className="text-sm font-medium text-text">{item}</p>
+                  <div className="rounded-lg border border-border bg-background p-6 h-full transition-all duration-200 hover:-translate-y-[2px] hover:border-slate-300 motion-reduce:hover:translate-y-0 space-y-2">
+                    <p className="text-sm font-medium text-text">{item.title}</p>
+                    <p className="text-sm text-muted">{item.summary}</p>
                   </div>
                 </Reveal>
               ))}
