@@ -15,9 +15,10 @@ from app.llm.client import (
     PageText,
 )
 from app.main import app
-from app.models.company import Company
+from app.models.company import Company, Location
 from app.models.evaluation import AnalysisJob, Evaluation
 from app.models.user import User
+from app.schemas.user import UserRole
 from app.services.chat_service import OFF_TOPIC_REPLY
 from app.services.job_launcher import InlineJobLauncher, get_job_launcher
 from app.services.seed_demo import DEMO_EMAIL
@@ -84,7 +85,7 @@ def test_full_happy_path():
 
     try:
         with patch("firebase_admin.auth.verify_id_token", return_value=_token(user_uid)):
-            # 1. User sends free text details sentence
+            # 1. User sends free text details sentence -> confirm_details card
             turn1 = client.post(
                 "/api/chat/turn",
                 headers=auth,
@@ -94,14 +95,38 @@ def test_full_happy_path():
             )
             assert turn1.status_code == 200
             data1 = turn1.json()
-            assert data1["state"] == "upload_requirements"
-            eval_id = data1["evaluation_id"]
-            assert eval_id is not None
-            assert "Created evaluation" in data1["reply"]
-            assert data1["expect"] == {"kind": "file", "file_kind": "requirements", "vendor_id": None, "vendor_name": None, "options": None}
-            assert data1["links"]["documents"] == f"/evaluations/{eval_id}/documents"
+            assert data1["state"] == "confirm_details"
+            assert data1["evaluation_id"] is None
+            assert data1["expect"]["kind"] == "choice"
+            actions1 = [opt["action"] for opt in data1["expect"]["options"]]
+            assert "create_evaluation" in actions1
+            assert "change_details" in actions1
+            assert "Housekeeping" in data1["reply"]
+            assert "BrightNest" in data1["reply"]
+            collected = data1["collected"]
 
-            # 2. Upload requirements document
+            # 2. Confirm: User clicks "Create evaluation" -> evaluation created, upload_files state
+            turn_confirm = client.post(
+                "/api/chat/turn",
+                headers=auth,
+                json={"action": "create_evaluation", "collected": collected},
+            )
+            assert turn_confirm.status_code == 200
+            data_confirm = turn_confirm.json()
+            assert data_confirm["state"] == "upload_files"
+            eval_id = data_confirm["evaluation_id"]
+            assert eval_id is not None
+            assert data_confirm["expect"]["kind"] == "files"
+            slots = data_confirm["expect"]["files"]
+            assert len(slots) == 4
+            assert slots[0]["kind"] == "requirements"
+            assert slots[0]["uploaded"] is False
+            v1_id = slots[1]["vendor_id"]
+            v2_id = slots[2]["vendor_id"]
+            v3_id = slots[3]["vendor_id"]
+            assert data_confirm["links"]["documents"] == f"/evaluations/{eval_id}/documents"
+
+            # 3. Upload requirements document
             req_pdf = make_valid_pdf_bytes(page_count=2)
             up_req = client.post(
                 f"/api/evaluations/{eval_id}/documents",
@@ -111,20 +136,17 @@ def test_full_happy_path():
             )
             assert up_req.status_code == 200
 
-            # 3. Turn after requirements upload -> expects proposal for vendor 1
-            turn2 = client.post(
+            # Turn after requirements upload -> still upload_files, 1 of 4 uploaded
+            turn_after_req = client.post(
                 "/api/chat/turn",
                 headers=auth,
                 json={"evaluation_id": eval_id},
             )
-            assert turn2.status_code == 200
-            data2 = turn2.json()
-            assert data2["state"] == "upload_proposal"
-            assert data2["expect"]["kind"] == "file"
-            assert data2["expect"]["file_kind"] == "proposal"
-            v1_id = data2["expect"]["vendor_id"]
-            assert v1_id is not None
-            assert data2["expect"]["vendor_name"] == "BrightNest Facility Services"
+            assert turn_after_req.status_code == 200
+            d_after_req = turn_after_req.json()
+            assert d_after_req["state"] == "upload_files"
+            assert d_after_req["expect"]["files"][0]["uploaded"] is True
+            assert d_after_req["expect"]["files"][1]["uploaded"] is False
 
             # 4. Upload proposal for vendor 1
             v1_pdf = make_valid_pdf_bytes(page_count=2)
@@ -136,18 +158,7 @@ def test_full_happy_path():
             )
             assert up_v1.status_code == 200
 
-            # 5. Turn -> expects proposal for vendor 2
-            turn3 = client.post(
-                "/api/chat/turn",
-                headers=auth,
-                json={"evaluation_id": eval_id},
-            )
-            data3 = turn3.json()
-            assert data3["state"] == "upload_proposal"
-            v2_id = data3["expect"]["vendor_id"]
-            assert data3["expect"]["vendor_name"] == "Shubh Services"
-
-            # 6. Upload proposal for vendor 2
+            # 5. Upload proposal for vendor 2
             v2_docx = _make_docx_bytes()
             up_v2 = client.post(
                 f"/api/evaluations/{eval_id}/documents",
@@ -157,18 +168,7 @@ def test_full_happy_path():
             )
             assert up_v2.status_code == 200
 
-            # 7. Turn -> expects proposal for vendor 3
-            turn4 = client.post(
-                "/api/chat/turn",
-                headers=auth,
-                json={"evaluation_id": eval_id},
-            )
-            data4 = turn4.json()
-            assert data4["state"] == "upload_proposal"
-            v3_id = data4["expect"]["vendor_id"]
-            assert data4["expect"]["vendor_name"] == "UrbanKleen Pvt Ltd"
-
-            # 8. Upload proposal for vendor 3
+            # 6. Upload proposal for vendor 3
             v3_pdf = make_valid_pdf_bytes(page_count=2)
             up_v3 = client.post(
                 f"/api/evaluations/{eval_id}/documents",
@@ -178,7 +178,7 @@ def test_full_happy_path():
             )
             assert up_v3.status_code == 200
 
-            # 9. All documents uploaded! Turn triggers extraction automatically
+            # 7. All documents uploaded! Turn triggers extraction automatically
             # Because InlineJobLauncher runs synchronously, extraction finishes immediately and sets requirements_review
             turn5 = client.post(
                 "/api/chat/turn",
@@ -278,7 +278,7 @@ def test_partial_details_and_four_vendors():
             d2 = r2.json()
             assert d2["state"] == "collecting_details"
             assert d2["collected"]["title"] == "Office Cleaning 2026"
-            assert d2["collected"]["category"] == "Housekeeping"
+            assert d2["collected"]["category"] == "Facilities / Housekeeping"
             # Should ask ONLY for vendor names
             assert "vendor" in d2["reply"]
             assert "title" not in d2["reply"]
@@ -540,8 +540,9 @@ async def test_resume_with_only_evaluation_id():
         r_draft = client.post("/api/chat/turn", headers=auth, json={"evaluation_id": eval_id})
         assert r_draft.status_code == 200
         d_draft = r_draft.json()
-        assert d_draft["state"] == "upload_requirements"
-        assert d_draft["expect"]["file_kind"] == "requirements"
+        assert d_draft["state"] == "upload_files"
+        assert d_draft["expect"]["kind"] == "files"
+        assert len(d_draft["expect"]["files"]) == 3
 
         # 2. Evaluation with requirements review status
         client.patch(f"/api/evaluations/{eval_id}", headers=auth, json={"status": "requirements_review"})
@@ -593,3 +594,441 @@ async def test_resume_with_only_evaluation_id():
                 await s.execute(delete(Evaluation).where(Evaluation.id == uuid.UUID(eval_id)))
                 await s.execute(delete(User).where(User.firebase_uid == user_uid))
                 await s.commit()
+
+
+@pytest.mark.asyncio
+async def test_confirm_before_create_and_change_details():
+    """Confirm card shown; nothing created until 'Create evaluation'; 'Change details' merges only mentioned fields."""
+    user_uid = f"uid-chat-confirm-{uuid.uuid4().hex}"
+    auth = {"Authorization": "Bearer token"}
+    fake_gemini = _build_test_fake_gemini()
+
+    app.dependency_overrides[get_gemini_client] = lambda: fake_gemini
+    eval_id = None
+
+    try:
+        with patch("firebase_admin.auth.verify_id_token", return_value=_token(user_uid)):
+            # 1. User provides complete details sentence
+            r1 = client.post(
+                "/api/chat/turn",
+                headers=auth,
+                json={"message": "Evaluate Housekeeping services between BrightNest and Shubh"},
+            )
+            assert r1.status_code == 200
+            d1 = r1.json()
+            assert d1["state"] == "confirm_details"
+            assert d1["evaluation_id"] is None
+            # Check confirm reply lists fields
+            reply = d1["reply"]
+            assert "Title:" in reply
+            assert "Category:" in reply
+            assert "Location:" in reply
+            assert "Vendors:" in reply
+            assert "Facilities / Housekeeping" in reply
+            assert "BrightNest" in reply and "Shubh" in reply
+
+            expect_opts = [opt["action"] for opt in d1["expect"]["options"]]
+            assert "create_evaluation" in expect_opts
+            assert "change_details" in expect_opts
+
+            # Verify NOTHING created in database yet
+            async with async_session() as s:
+                user_res = await s.execute(select(User).where(User.firebase_uid == user_uid))
+                u = user_res.scalar_one_or_none()
+                if u:
+                    evals_res = await s.execute(select(Evaluation).where(Evaluation.user_id == u.id))
+                    assert len(evals_res.scalars().all()) == 0
+
+            # 2. Click "Change details" -> expects text "Tell me what to change."
+            r2 = client.post(
+                "/api/chat/turn",
+                headers=auth,
+                json={"action": "change_details", "collected": d1["collected"]},
+            )
+            assert r2.status_code == 200
+            d2 = r2.json()
+            assert d2["state"] == "collecting_details"
+            assert d2["reply"] == "Tell me what to change."
+            assert d2["expect"]["kind"] == "text"
+
+            # 3. User says "only title: Custom Title 2026"
+            r3 = client.post(
+                "/api/chat/turn",
+                headers=auth,
+                json={
+                    "message": "only title: Custom Title 2026",
+                    "collected": d2["collected"],
+                },
+            )
+            assert r3.status_code == 200
+            d3 = r3.json()
+            # Title changed; category and vendors merged from previous
+            assert d3["state"] == "confirm_details"
+            assert d3["collected"]["title"] == "Custom Title 2026"
+            assert d3["collected"]["category"] == "Facilities / Housekeeping"
+            assert len(d3["collected"]["vendor_names"]) == 2
+
+            # Still nothing in DB
+            async with async_session() as s:
+                if u:
+                    evals_res = await s.execute(select(Evaluation).where(Evaluation.user_id == u.id))
+                    assert len(evals_res.scalars().all()) == 0
+
+            # 4. Now click "Create evaluation"
+            r4 = client.post(
+                "/api/chat/turn",
+                headers=auth,
+                json={"action": "create_evaluation", "collected": d3["collected"]},
+            )
+            assert r4.status_code == 200
+            d4 = r4.json()
+            assert d4["state"] == "upload_files"
+            eval_id = d4["evaluation_id"]
+            assert eval_id is not None
+            assert d4["expect"]["kind"] == "files"
+
+            # Now exactly 1 evaluation created in DB
+            async with async_session() as s:
+                evals_res = await s.execute(select(Evaluation).where(Evaluation.id == uuid.UUID(eval_id)))
+                db_eval = evals_res.scalar_one_or_none()
+                assert db_eval is not None
+                assert db_eval.title == "Custom Title 2026"
+                assert db_eval.category == "Facilities / Housekeeping"
+
+    finally:
+        app.dependency_overrides.clear()
+        if eval_id:
+            async with async_session() as s:
+                await s.execute(delete(Evaluation).where(Evaluation.id == uuid.UUID(eval_id)))
+                await s.execute(delete(User).where(User.firebase_uid == user_uid))
+                await s.commit()
+
+
+def test_category_mapping():
+    """Category: 'housekeeping' → Facilities / Housekeeping; 'security' → Facilities / Security; both → choice; 'pest control' → custom text."""
+    user_uid = f"uid-chat-cat-{uuid.uuid4().hex}"
+    auth = {"Authorization": "Bearer token"}
+    fake_gemini = _build_test_fake_gemini()
+
+    app.dependency_overrides[get_gemini_client] = lambda: fake_gemini
+
+    try:
+        with patch("firebase_admin.auth.verify_id_token", return_value=_token(user_uid)):
+            # 1. "housekeeping" -> Facilities / Housekeeping
+            r1 = client.post(
+                "/api/chat/turn",
+                headers=auth,
+                json={"message": "only category: Housekeeping"},
+            )
+            assert r1.status_code == 200
+            assert r1.json()["collected"]["category"] == "Facilities / Housekeeping"
+
+            # 2. "security" -> Facilities / Security
+            r2 = client.post(
+                "/api/chat/turn",
+                headers=auth,
+                json={"message": "only category: Security"},
+            )
+            assert r2.status_code == 200
+            assert r2.json()["collected"]["category"] == "Facilities / Security"
+
+            # 3. Mentions both -> choice between them
+            r3 = client.post(
+                "/api/chat/turn",
+                headers=auth,
+                json={"message": "only category: housekeeping and security"},
+            )
+            assert r3.status_code == 200
+            d3 = r3.json()
+            assert d3["expect"]["kind"] == "choice"
+            labels = [opt["label"] for opt in d3["expect"]["options"]]
+            assert "Facilities / Housekeeping" in labels
+            assert "Facilities / Security" in labels
+
+            # User picks one choice option carrying value
+            r3_choice = client.post(
+                "/api/chat/turn",
+                headers=auth,
+                json={
+                    "action": "select_category",
+                    "value": "Facilities / Security",
+                    "collected": d3["collected"],
+                },
+            )
+            assert r3_choice.status_code == 200
+            assert r3_choice.json()["collected"]["category"] == "Facilities / Security"
+
+            # 4. "pest control" -> custom text preserved (1-60 chars)
+            r4 = client.post(
+                "/api/chat/turn",
+                headers=auth,
+                json={"message": "only category: pest control"},
+            )
+            assert r4.status_code == 200
+            assert r4.json()["collected"]["category"] == "pest control"
+
+    finally:
+        app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
+async def test_location_mapping_and_validation():
+    """Location: matched by name; matched by city; no match → choices incl. 'No location'; another company's location id → rejected."""
+    user_uid = f"uid-chat-loc-{uuid.uuid4().hex}"
+    auth = {"Authorization": "Bearer token"}
+    fake_gemini = _build_test_fake_gemini()
+
+    app.dependency_overrides[get_gemini_client] = lambda: fake_gemini
+
+    company_id = uuid.uuid4()
+    loc1_id = uuid.uuid4()
+    loc2_id = uuid.uuid4()
+    foreign_loc_id = uuid.uuid4()
+    foreign_company_id = uuid.uuid4()
+
+    async with async_session() as s:
+        # User company & locations
+        co = Company(id=company_id, name="Test Chat Co")
+        s.add(co)
+        loc1 = Location(id=loc1_id, company_id=company_id, name="Andheri East Office", city="Mumbai")
+        loc2 = Location(id=loc2_id, company_id=company_id, name="Headquarters", city="Pune")
+        s.add_all([loc1, loc2])
+
+        # Foreign company & location
+        co_foreign = Company(id=foreign_company_id, name="Foreign Co")
+        s.add(co_foreign)
+        foreign_loc = Location(id=foreign_loc_id, company_id=foreign_company_id, name="Foreign Site", city="Delhi")
+        s.add(foreign_loc)
+
+        # Create user
+        usr = User(id=uuid.uuid4(), firebase_uid=user_uid, email="loc_user@vixenone.app", display_name="Loc User", role=UserRole.FACILITIES_MANAGER, company_id=company_id)
+        s.add(usr)
+        await s.commit()
+
+    try:
+        with patch("firebase_admin.auth.verify_id_token", return_value=_token(user_uid)):
+            # 1. Matched by name
+            r1 = client.post(
+                "/api/chat/turn",
+                headers=auth,
+                json={"message": "Evaluate Housekeeping between BrightNest and Shubh location: Andheri East"},
+            )
+            assert r1.status_code == 200
+            d1 = r1.json()
+            assert d1["state"] == "confirm_details"
+            assert str(d1["collected"]["location_id"]) == str(loc1_id)
+            assert "Andheri East Office" in d1["reply"]
+
+            # 2. Matched by city ("Pune")
+            r2 = client.post(
+                "/api/chat/turn",
+                headers=auth,
+                json={"message": "Evaluate Housekeeping between BrightNest and Shubh location: Pune"},
+            )
+            assert r2.status_code == 200
+            d2 = r2.json()
+            assert d2["state"] == "confirm_details"
+            assert str(d2["collected"]["location_id"]) == str(loc2_id)
+            assert "Headquarters" in d2["reply"]
+
+            # 3. No match ("Delhi") -> returns choice including "No location"
+            r3 = client.post(
+                "/api/chat/turn",
+                headers=auth,
+                json={"message": "Evaluate Housekeeping between BrightNest and Shubh location: Delhi"},
+            )
+            assert r3.status_code == 200
+            d3 = r3.json()
+            assert d3["state"] == "collecting_details"
+            assert d3["expect"]["kind"] == "choice"
+            labels3 = [opt["label"] for opt in d3["expect"]["options"]]
+            values3 = [opt["value"] for opt in d3["expect"]["options"]]
+            assert "No location" in labels3
+            assert "none" in values3
+            assert str(loc1_id) in values3
+            assert str(loc2_id) in values3
+
+            # Selecting "No location" proceeds to confirm_details with None location
+            r3_none = client.post(
+                "/api/chat/turn",
+                headers=auth,
+                json={"action": "select_location", "value": "none", "collected": d3["collected"]},
+            )
+            assert r3_none.status_code == 200
+            d3_none = r3_none.json()
+            assert d3_none["state"] == "confirm_details"
+            assert d3_none["collected"]["location_id"] is None
+            assert "Location: None" in d3_none["reply"]
+
+            # 4. Another company's location id -> 400 rejected
+            r4_foreign = client.post(
+                "/api/chat/turn",
+                headers=auth,
+                json={"action": "select_location", "value": str(foreign_loc_id), "collected": d3["collected"]},
+            )
+            assert r4_foreign.status_code == 400
+            assert "Location does not belong to company" in r4_foreign.json()["detail"]
+
+    finally:
+        app.dependency_overrides.clear()
+        async with async_session() as s:
+            await s.execute(delete(Location).where(Location.company_id.in_([company_id, foreign_company_id])))
+            await s.execute(delete(User).where(User.firebase_uid == user_uid))
+            await s.execute(delete(Company).where(Company.id.in_([company_id, foreign_company_id])))
+            await s.commit()
+
+
+@pytest.mark.asyncio
+async def test_files_step_multi_slot():
+    """Files step lists all slots, updates after each upload, starts extraction when complete."""
+    user_uid = f"uid-chat-slots-{uuid.uuid4().hex}"
+    auth = {"Authorization": "Bearer token"}
+    fake_gemini = _build_test_fake_gemini()
+
+    app.dependency_overrides[get_gemini_client] = lambda: fake_gemini
+    app.dependency_overrides[get_job_launcher] = lambda: InlineJobLauncher(
+        session_factory=async_session,
+        gemini_client_factory=lambda: fake_gemini,
+    )
+    eval_id = None
+
+    try:
+        with patch("firebase_admin.auth.verify_id_token", return_value=_token(user_uid)):
+            # Create an evaluation via API
+            create_resp = client.post(
+                "/api/evaluations",
+                headers=auth,
+                json={"title": "Multi-Slot RFP", "category": "Facilities / Housekeeping", "vendor_names": ["Vendor Alpha", "Vendor Beta"]},
+            )
+            eval_id = create_resp.json()["id"]
+            vendors = create_resp.json()["vendors"]
+            v1_id = vendors[0]["id"]
+            v2_id = vendors[1]["id"]
+
+            # 1. Turn on draft evaluation -> lists all 3 slots (requirements + 2 proposals), none uploaded
+            t1 = client.post("/api/chat/turn", headers=auth, json={"evaluation_id": eval_id})
+            assert t1.status_code == 200
+            d1 = t1.json()
+            assert d1["state"] == "upload_files"
+            assert d1["expect"]["kind"] == "files"
+            slots1 = d1["expect"]["files"]
+            assert len(slots1) == 3
+            assert slots1[0]["kind"] == "requirements"
+            assert slots1[0]["uploaded"] is False
+            assert slots1[1]["kind"] == "proposal"
+            assert slots1[1]["vendor_name"] == "Vendor Alpha"
+            assert slots1[1]["uploaded"] is False
+            assert slots1[2]["kind"] == "proposal"
+            assert slots1[2]["vendor_name"] == "Vendor Beta"
+            assert slots1[2]["uploaded"] is False
+
+            # 2. Upload requirements doc
+            req_pdf = make_valid_pdf_bytes(page_count=1)
+            up_req = client.post(
+                f"/api/evaluations/{eval_id}/documents",
+                headers=auth,
+                files={"file": ("rfp.pdf", req_pdf, "application/pdf")},
+                data={"kind": "requirements"},
+            )
+            assert up_req.status_code == 200
+
+            # Turn -> slot list updates: slot 0 uploaded=True, filename='rfp.pdf'
+            t2 = client.post("/api/chat/turn", headers=auth, json={"evaluation_id": eval_id})
+            d2 = t2.json()
+            assert d2["state"] == "upload_files"
+            slots2 = d2["expect"]["files"]
+            assert slots2[0]["uploaded"] is True
+            assert slots2[0]["filename"] == "rfp.pdf"
+            assert slots2[1]["uploaded"] is False
+            assert slots2[2]["uploaded"] is False
+
+            # 3. Upload Vendor Alpha proposal
+            v1_pdf = make_valid_pdf_bytes(page_count=1)
+            up_v1 = client.post(
+                f"/api/evaluations/{eval_id}/documents",
+                headers=auth,
+                files={"file": ("alpha.pdf", v1_pdf, "application/pdf")},
+                data={"kind": "proposal", "vendor_id": v1_id},
+            )
+            assert up_v1.status_code == 200
+
+            # Turn -> slot 0 & 1 uploaded=True, slot 2 uploaded=False
+            t3 = client.post("/api/chat/turn", headers=auth, json={"evaluation_id": eval_id})
+            d3 = t3.json()
+            assert d3["state"] == "upload_files"
+            slots3 = d3["expect"]["files"]
+            assert slots3[0]["uploaded"] is True
+            assert slots3[1]["uploaded"] is True
+            assert slots3[2]["uploaded"] is False
+
+            # 4. Upload Vendor Beta proposal
+            v2_pdf = make_valid_pdf_bytes(page_count=1)
+            up_v2 = client.post(
+                f"/api/evaluations/{eval_id}/documents",
+                headers=auth,
+                files={"file": ("beta.pdf", v2_pdf, "application/pdf")},
+                data={"kind": "proposal", "vendor_id": v2_id},
+            )
+            assert up_v2.status_code == 200
+
+            # Turn -> All uploaded! Extraction starts automatically
+            t4 = client.post("/api/chat/turn", headers=auth, json={"evaluation_id": eval_id})
+            d4 = t4.json()
+            # With Inline launcher, job transitions immediately
+            assert d4["state"] in ("extracting", "requirements_review")
+
+    finally:
+        app.dependency_overrides.clear()
+        if eval_id:
+            async with async_session() as s:
+                await s.execute(delete(AnalysisJob).where(AnalysisJob.evaluation_id == uuid.UUID(eval_id)))
+                await s.execute(delete(Evaluation).where(Evaluation.id == uuid.UUID(eval_id)))
+                await s.execute(delete(User).where(User.firebase_uid == user_uid))
+                await s.commit()
+
+
+def test_reasons_contain_no_decimals_or_forbidden_words():
+    """Reasons contain no decimals and none of: exact, evidenced."""
+    import re
+    from decimal import Decimal
+    from app.services.scoring import compute_recommendation
+
+    decimal_regex = re.compile(r"\b\d+\.\d+\b")
+
+    # Case A: Clear winner
+    rec_a = compute_recommendation([
+        {"id": "v1", "name": "BrightNest", "exact_total": Decimal("85.50"), "mandatory_failures": 0, "mandatory_not_evidenced": 0, "mandatory_needs_review": 0},
+        {"id": "v2", "name": "Shubh", "exact_total": Decimal("70.25"), "mandatory_failures": 1, "mandatory_not_evidenced": 0, "mandatory_needs_review": 0},
+    ])
+    assert rec_a["state"] == "recommended"
+    assert rec_a["reasons"][0] == "Highest total score (86) and all mandatory requirements met."
+    assert rec_a["reasons"][1] == "Shubh: 1 mandatory requirement not met."
+
+    # Case B: Tie
+    rec_b = compute_recommendation([
+        {"id": "v1", "name": "BrightNest", "exact_total": Decimal("80.00"), "mandatory_failures": 0, "mandatory_not_evidenced": 0, "mandatory_needs_review": 0},
+        {"id": "v2", "name": "Shubh", "exact_total": Decimal("80.00"), "mandatory_failures": 0, "mandatory_not_evidenced": 0, "mandatory_needs_review": 0},
+    ])
+    assert rec_b["state"] == "insufficient"
+
+    # Case C: Insufficient due to mandatory not evidenced
+    rec_c = compute_recommendation([
+        {"id": "v1", "name": "BrightNest", "exact_total": Decimal("85.00"), "mandatory_failures": 0, "mandatory_not_evidenced": 1, "mandatory_needs_review": 0},
+        {"id": "v2", "name": "Shubh", "exact_total": Decimal("70.00"), "mandatory_failures": 0, "mandatory_not_evidenced": 0, "mandatory_needs_review": 0},
+    ])
+    assert rec_c["state"] == "insufficient"
+
+    # Case D: All failed
+    rec_d = compute_recommendation([
+        {"id": "v1", "name": "BrightNest", "exact_total": Decimal("85.00"), "mandatory_failures": 1, "mandatory_not_evidenced": 0, "mandatory_needs_review": 0},
+        {"id": "v2", "name": "Shubh", "exact_total": Decimal("70.00"), "mandatory_failures": 2, "mandatory_not_evidenced": 0, "mandatory_needs_review": 0},
+    ])
+    assert rec_d["state"] == "insufficient"
+
+    # Verify every reason in every case
+    all_reasons = rec_a["reasons"] + rec_b["reasons"] + rec_c["reasons"] + rec_d["reasons"]
+    for r in all_reasons:
+        assert not decimal_regex.search(r), f"Reason contains decimals: {r}"
+        assert "exact" not in r.lower(), f"Reason contains 'exact': {r}"
+        assert "evidenced" not in r.lower(), f"Reason contains 'evidenced': {r}"
+

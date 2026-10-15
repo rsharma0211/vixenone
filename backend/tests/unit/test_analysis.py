@@ -285,7 +285,7 @@ def test_recommendation_rules():
     rec = compute_recommendation(vendors)
     assert rec["state"] == "recommended"
     assert rec["vendor_id"] == "v1"
-    assert "Vendor 1: highest exact total (85.50)" in rec["reasons"][0]
+    assert rec["reasons"][0] == "Highest total score (86) and all mandatory requirements met."
 
     # Case 2: Mandatory failure excludes vendor
     vendors_fail = [
@@ -333,7 +333,7 @@ def test_recommendation_rules():
     rec3 = compute_recommendation(vendors_not_ev)
     assert rec3["state"] == "insufficient"
     assert rec3["vendor_id"] is None
-    assert any("BrightNest: 1 mandatory requirement not evidenced" in r for r in rec3["reasons"])
+    assert any("BrightNest: 1 mandatory requirement without evidence." in r for r in rec3["reasons"])
 
     # Case 4: Top vendor has mandatory needs_review -> insufficient
     vendors_rev = [
@@ -357,7 +357,7 @@ def test_recommendation_rules():
     rec4 = compute_recommendation(vendors_rev)
     assert rec4["state"] == "insufficient"
     assert rec4["vendor_id"] is None
-    assert any("BrightNest: 2 mandatory requirements need review" in r for r in rec4["reasons"])
+    assert any("BrightNest: 2 mandatory requirements need review." in r for r in rec4["reasons"])
 
     # Case 5: Tie on exact total -> insufficient
     vendors_tie = [
@@ -381,7 +381,7 @@ def test_recommendation_rules():
     rec5 = compute_recommendation(vendors_tie)
     assert rec5["state"] == "insufficient"
     assert rec5["vendor_id"] is None
-    assert any("Tie on exact total" in r for r in rec5["reasons"])
+    assert any("Tie on total score (80) between eligible vendors: Vendor 1, Vendor 2." in r for r in rec5["reasons"])
 
     # Case 6: Fewer than 2 vendors -> insufficient
     vendors_one = [

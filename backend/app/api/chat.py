@@ -31,4 +31,5 @@ async def chat_turn(
         request=payload,
         launcher=launcher,
         gemini_client=gemini_client,
+        company_id=user.company_id,
     )

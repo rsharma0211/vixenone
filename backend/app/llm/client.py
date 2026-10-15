@@ -53,6 +53,7 @@ class ExtractedRequirement(BaseModel):
 class ParsedEvaluationDetails(BaseModel):
     title: Optional[str] = None
     category: Optional[str] = None
+    location: Optional[str] = None
     vendor_names: List[str] = Field(default_factory=list)
 
 
@@ -238,7 +239,7 @@ def build_analyse_vendor_prompt(
 
 
 def build_parse_details_prompt(user_message: str) -> str:
-    prompt_path = PROMPTS_DIR / "parse_details_v1.txt"
+    prompt_path = PROMPTS_DIR / "parse_details_v2.txt"
     template = prompt_path.read_text(encoding="utf-8")
     safe_message = (user_message or "")[:1000]
     return template.replace("{user_message}", safe_message)
@@ -708,37 +709,59 @@ class FakeGeminiClient(GeminiClient):
         # Content-based parsing for tests:
         title = None
         category = None
+        location = None
         vendors: List[str] = []
 
-        if "housekeeping" in msg_lower:
+        if "housekeeping" in msg_lower and "security" in msg_lower:
+            category = "housekeeping and security"
+        elif "housekeeping" in msg_lower:
             category = "Housekeeping"
         elif "security" in msg_lower:
             category = "Security"
         elif "pantry" in msg_lower:
             category = "Pantry"
+        elif "pest control" in msg_lower:
+            category = "pest control"
         elif "facilities" in msg_lower:
             category = "Facilities"
+
+        if "location:" in msg_lower:
+            location = user_message.split("location:", 1)[1].strip()
+        elif "andheri" in msg_lower:
+            location = "Andheri East Office"
+        elif "mumbai" in msg_lower:
+            location = "Mumbai"
+        elif "bkc" in msg_lower:
+            location = "BKC Office"
+        elif "powai" in msg_lower:
+            location = "Powai Campus"
+        elif "delhi" in msg_lower:
+            location = "Delhi"
 
         # Explicit test markers
         if "only title:" in msg_lower:
             title = user_message.split("only title:", 1)[1].strip()
-            return ParsedEvaluationDetails(title=title, category=None, vendor_names=[])
+            return ParsedEvaluationDetails(title=title, category=None, location=None, vendor_names=[])
 
         if "only category:" in msg_lower:
             category = user_message.split("only category:", 1)[1].strip()
-            return ParsedEvaluationDetails(title=None, category=category, vendor_names=[])
+            return ParsedEvaluationDetails(title=None, category=category, location=None, vendor_names=[])
+
+        if "only location:" in msg_lower:
+            location = user_message.split("only location:", 1)[1].strip()
+            return ParsedEvaluationDetails(title=None, category=None, location=location, vendor_names=[])
 
         if "only vendors:" in msg_lower:
             v_str = user_message.split("only vendors:", 1)[1].strip()
             vendors = [v.strip() for v in v_str.split(",") if v.strip()]
-            return ParsedEvaluationDetails(title=None, category=None, vendor_names=vendors)
+            return ParsedEvaluationDetails(title=None, category=None, location=None, vendor_names=vendors)
 
         # 4 vendors case for testing "4 vendors -> asks to choose"
         if "4 vendors" in msg_lower or ("vendor a" in msg_lower and "vendor d" in msg_lower) or "four vendors" in msg_lower:
             vendors = ["Vendor A", "Vendor B", "Vendor C", "Vendor D"]
             title = "Office Cleaning"
             category = category or "Housekeeping"
-            return ParsedEvaluationDetails(title=title, category=category, vendor_names=vendors)
+            return ParsedEvaluationDetails(title=title, category=category, location=location, vendor_names=vendors)
 
         if "brightnest" in msg_lower and "shubh" in msg_lower and "urbankleen" in msg_lower:
             vendors = ["BrightNest Facility Services", "Shubh Services", "UrbanKleen Pvt Ltd"]
@@ -759,6 +782,7 @@ class FakeGeminiClient(GeminiClient):
         return ParsedEvaluationDetails(
             title=title,
             category=category,
+            location=location,
             vendor_names=vendors,
         )
 

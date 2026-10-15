@@ -407,11 +407,6 @@ export interface components {
             /** Vendor Id */
             vendor_id?: string | null;
         };
-        /**
-         * ChatAction
-         * @enum {string}
-         */
-        ChatAction: "start" | "start_extraction" | "run_analysis" | "review_first" | "try_again" | "confirm_rerun";
         /** ChatChoiceOption */
         ChatChoiceOption: {
             /** Action */
@@ -420,6 +415,8 @@ export interface components {
             label: string;
             /** Link */
             link?: string | null;
+            /** Value */
+            value?: string | null;
         };
         /** ChatCollectedDetails */
         ChatCollectedDetails: {
@@ -427,8 +424,26 @@ export interface components {
             title?: string | null;
             /** Category */
             category?: string | null;
+            /** Location Id */
+            location_id?: string | null;
             /** Vendor Names */
             vendor_names?: string[] | null;
+        };
+        /** ChatDocumentSlot */
+        ChatDocumentSlot: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "requirements" | "proposal";
+            /** Vendor Id */
+            vendor_id?: string | null;
+            /** Vendor Name */
+            vendor_name?: string | null;
+            /** Uploaded */
+            uploaded: boolean;
+            /** Filename */
+            filename?: string | null;
         };
         /** ChatExpect */
         ChatExpect: {
@@ -436,7 +451,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "text" | "file" | "choice";
+            kind: "text" | "file" | "files" | "choice";
             /** File Kind */
             file_kind?: ("requirements" | "proposal") | null;
             /** Vendor Id */
@@ -445,6 +460,8 @@ export interface components {
             vendor_name?: string | null;
             /** Options */
             options?: components["schemas"]["ChatChoiceOption"][] | null;
+            /** Files */
+            files?: components["schemas"]["ChatDocumentSlot"][] | null;
         };
         /** ChatJobInfo */
         ChatJobInfo: {
@@ -472,7 +489,10 @@ export interface components {
             evaluation_id?: string | null;
             /** Message */
             message?: string | null;
-            action?: components["schemas"]["ChatAction"] | null;
+            /** Action */
+            action?: string | null;
+            /** Value */
+            value?: string | null;
             collected?: components["schemas"]["ChatCollectedDetails"] | null;
         };
         /** ChatTurnResponse */

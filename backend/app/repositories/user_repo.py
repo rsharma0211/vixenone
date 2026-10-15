@@ -12,6 +12,14 @@ from app.schemas.user import UserRole
 
 class UserRepository:
     @staticmethod
+    async def get_by_id(
+        session: AsyncSession, user_id: uuid.UUID
+    ) -> Optional[User]:
+        stmt = select(User).where(User.id == user_id)
+        result = await session.execute(stmt)
+        return result.scalar_one_or_none()
+
+    @staticmethod
     async def get_by_firebase_uid(
         session: AsyncSession, firebase_uid: str
     ) -> Optional[User]:

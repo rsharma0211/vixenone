@@ -260,29 +260,29 @@ def compute_recommendation(
         mne = v["mandatory_not_evidenced"]
         mnr = v["mandatory_needs_review"]
         if mf > 0:
-            noun = "mandatory failure" if mf == 1 else "mandatory failures"
-            vendor_issue_reasons.append(f"{vname}: {mf} {noun}")
+            noun = "mandatory requirement not met" if mf == 1 else "mandatory requirements not met"
+            vendor_issue_reasons.append(f"{vname}: {mf} {noun}.")
         if mne > 0:
             noun = (
-                "mandatory requirement not evidenced"
+                "mandatory requirement without evidence"
                 if mne == 1
-                else "mandatory requirements not evidenced"
+                else "mandatory requirements without evidence"
             )
-            vendor_issue_reasons.append(f"{vname}: {mne} {noun}")
+            vendor_issue_reasons.append(f"{vname}: {mne} {noun}.")
         if mnr > 0:
             noun = (
                 "mandatory requirement needs review"
                 if mnr == 1
                 else "mandatory requirements need review"
             )
-            vendor_issue_reasons.append(f"{vname}: {mnr} {noun}")
+            vendor_issue_reasons.append(f"{vname}: {mnr} {noun}.")
 
     if not eligible:
         return {
             "state": "insufficient",
             "vendor_id": None,
             "reasons": vendor_issue_reasons
-            or ["All vendors have mandatory requirement failures."],
+            or ["All vendors have mandatory requirements not met."],
         }
 
     max_total = max(v["exact_total"] for v in eligible)
@@ -290,8 +290,9 @@ def compute_recommendation(
 
     if len(top_eligible) > 1:
         tied_names = ", ".join(v["name"] for v in top_eligible)
+        tie_rounded = int(round_half_up(max_total, 0))
         reasons = [
-            f"Tie on exact total ({max_total}) between eligible vendors: {tied_names}"
+            f"Tie on total score ({tie_rounded}) between eligible vendors: {tied_names}."
         ] + vendor_issue_reasons
         return {
             "state": "insufficient",
@@ -310,18 +311,18 @@ def compute_recommendation(
         mnr = top_vendor["mandatory_needs_review"]
         if mne > 0:
             noun = (
-                "mandatory requirement not evidenced"
+                "mandatory requirement without evidence"
                 if mne == 1
-                else "mandatory requirements not evidenced"
+                else "mandatory requirements without evidence"
             )
-            top_reasons.append(f"{vname}: {mne} {noun}")
+            top_reasons.append(f"{vname}: {mne} {noun}.")
         if mnr > 0:
             noun = (
                 "mandatory requirement needs review"
                 if mnr == 1
                 else "mandatory requirements need review"
             )
-            top_reasons.append(f"{vname}: {mnr} {noun}")
+            top_reasons.append(f"{vname}: {mnr} {noun}.")
         for r in vendor_issue_reasons:
             if r not in top_reasons:
                 top_reasons.append(r)
@@ -332,16 +333,17 @@ def compute_recommendation(
         }
 
     # Clean recommendation for top_vendor
+    top_rounded = int(round_half_up(top_vendor["exact_total"], 0))
     rec_reasons: List[str] = [
-        f"{top_vendor['name']}: highest exact total ({top_vendor['exact_total']}) with all mandatory requirements evidenced and met"
+        f"Highest total score ({top_rounded}) and all mandatory requirements met."
     ]
     for v in analysed_vendors:
         if v["vendor_id"] == top_vendor["vendor_id"]:
             continue
         if v["mandatory_failures"] > 0:
             mf = v["mandatory_failures"]
-            noun = "mandatory failure" if mf == 1 else "mandatory failures"
-            rec_reasons.append(f"{v['name']}: {mf} {noun}")
+            noun = "mandatory requirement not met" if mf == 1 else "mandatory requirements not met"
+            rec_reasons.append(f"{v['name']}: {mf} {noun}.")
 
     return {
         "state": "recommended",

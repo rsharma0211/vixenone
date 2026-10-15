@@ -11,11 +11,16 @@ class ChatAction(str, Enum):
     REVIEW_FIRST = "review_first"
     TRY_AGAIN = "try_again"
     CONFIRM_RERUN = "confirm_rerun"
+    CREATE_EVALUATION = "create_evaluation"
+    CHANGE_DETAILS = "change_details"
+    SELECT_CATEGORY = "select_category"
+    SELECT_LOCATION = "select_location"
 
 
 class ChatCollectedDetails(BaseModel):
     title: Optional[str] = None
     category: Optional[str] = None
+    location_id: Optional[uuid.UUID] = None
     vendor_names: Optional[List[str]] = Field(default_factory=list)
 
 
@@ -23,14 +28,24 @@ class ChatChoiceOption(BaseModel):
     action: str
     label: str
     link: Optional[str] = None
+    value: Optional[str] = None
+
+
+class ChatDocumentSlot(BaseModel):
+    kind: Literal["requirements", "proposal"]
+    vendor_id: Optional[uuid.UUID] = None
+    vendor_name: Optional[str] = None
+    uploaded: bool
+    filename: Optional[str] = None
 
 
 class ChatExpect(BaseModel):
-    kind: Literal["text", "file", "choice"]
+    kind: Literal["text", "file", "files", "choice"]
     file_kind: Optional[Literal["requirements", "proposal"]] = None
     vendor_id: Optional[uuid.UUID] = None
     vendor_name: Optional[str] = None
     options: Optional[List[ChatChoiceOption]] = None
+    files: Optional[List[ChatDocumentSlot]] = None
 
 
 class ChatJobInfo(BaseModel):
@@ -59,7 +74,8 @@ class ChatSummary(BaseModel):
 class ChatTurnRequest(BaseModel):
     evaluation_id: Optional[uuid.UUID] = None
     message: Optional[str] = Field(default=None, max_length=1000)
-    action: Optional[ChatAction] = None
+    action: Optional[str] = None
+    value: Optional[str] = None
     collected: Optional[ChatCollectedDetails] = None
 
 
