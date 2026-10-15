@@ -22,6 +22,9 @@ class ChatCollectedDetails(BaseModel):
     category: Optional[str] = None
     location_id: Optional[uuid.UUID] = None
     vendor_names: Optional[List[str]] = Field(default_factory=list)
+    no_location: Optional[bool] = False
+    is_change_mode: Optional[bool] = False
+    awaiting_custom_category: Optional[bool] = False
 
 
 class ChatChoiceOption(BaseModel):

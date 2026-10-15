@@ -1,4 +1,5 @@
 import logging
+import re
 from decimal import Decimal
 from typing import Dict, List, Optional, Tuple
 import uuid
@@ -63,24 +64,50 @@ def map_category_text(raw_text: Optional[str]) -> Tuple[Optional[str], bool]:
     return clean if clean else None, False
 
 
+def find_location_matches(
+    company_locs: List[Tuple[Location, int]], location_text: Optional[str]
+) -> List[Location]:
+    if not location_text or not location_text.strip():
+        return []
+    target = location_text.strip().lower()
+
+    # 1. Exact match by name or city
+    exact_matches = [
+        loc for loc, _ in company_locs
+        if loc.name.lower() == target or (loc.city and loc.city.lower() == target)
+    ]
+    if exact_matches:
+        return exact_matches
+
+    # 2. Substring or partial word match ("Andheri" -> "Andheri East Office")
+    target_words = {w for w in target.split() if len(w) >= 3}
+    partial_matches: List[Location] = []
+    for loc, _ in company_locs:
+        name_lower = loc.name.lower()
+        city_lower = (loc.city or "").lower()
+        if target in name_lower or (city_lower and target in city_lower):
+            partial_matches.append(loc)
+            continue
+        if name_lower in target or (city_lower and city_lower in target):
+            partial_matches.append(loc)
+            continue
+        name_words = {w for w in name_lower.split() if len(w) >= 3}
+        city_words = {w for w in city_lower.split() if len(w) >= 3}
+        if target_words & name_words or target_words & city_words:
+            partial_matches.append(loc)
+            continue
+
+    return partial_matches
+
+
 async def match_location(
     session: AsyncSession, company_id: Optional[uuid.UUID], location_text: Optional[str]
 ) -> Optional[Location]:
     if not company_id or not location_text or not location_text.strip():
         return None
     locs = await CompanyRepository.list_locations_with_counts(session, company_id)
-    target = location_text.strip().lower()
-    # 1. Exact match by name or city
-    for loc, _ in locs:
-        if loc.name.lower() == target or (loc.city and loc.city.lower() == target):
-            return loc
-    # 2. Substring match
-    for loc, _ in locs:
-        if target in loc.name.lower() or loc.name.lower() in target:
-            return loc
-        if loc.city and (target in loc.city.lower() or loc.city.lower() in target):
-            return loc
-    return None
+    matches = find_location_matches(locs, location_text)
+    return matches[0] if len(matches) == 1 else None
 
 
 def format_inr(amount: Optional[float | Decimal | int]) -> str:
@@ -550,11 +577,20 @@ class ChatService:
         request: ChatTurnRequest,
         gemini_client: GeminiClient,
     ) -> ChatTurnResponse:
-        collected = request.collected or ChatCollectedDetails()
+        collected = request.collected.model_copy() if request.collected else ChatCollectedDetails()
+
+        company_locs = (
+            await CompanyRepository.list_locations_with_counts(session, company_id)
+            if company_id
+            else []
+        )
 
         # 1. Foreign location validation or explicit selection
-        if request.value and request.value != "none":
-            if request.action in ("select_location", ChatAction.SELECT_LOCATION):
+        if request.action in ("select_location", ChatAction.SELECT_LOCATION):
+            if request.value == "none":
+                collected.location_id = None
+                collected.no_location = True
+            elif request.value:
                 try:
                     val_uuid = uuid.UUID(request.value)
                 except (ValueError, AttributeError):
@@ -574,15 +610,25 @@ class ChatService:
                         detail="Location does not belong to company",
                     )
                 collected.location_id = loc.id
+                collected.no_location = False
 
-        if request.action in ("select_location", ChatAction.SELECT_LOCATION) and request.value == "none":
-            collected.location_id = None
+        # 2. Category selection via action
+        if request.action in ("select_category", ChatAction.SELECT_CATEGORY):
+            if request.value == "other":
+                collected.awaiting_custom_category = True
+                return ChatTurnResponse(
+                    reply="Type your category.",
+                    state="collecting_details",
+                    expect=ChatExpect(kind="text"),
+                    collected=collected,
+                )
+            elif request.value:
+                collected.category = request.value.strip()[:60]
+                collected.awaiting_custom_category = False
 
-        if request.action in ("select_category", ChatAction.SELECT_CATEGORY) and request.value:
-            collected.category = request.value.strip()
-
-        # 2. Action: change_details -> prompt for changes
+        # 3. Action: change_details -> prompt for changes
         if request.action in ("change_details", ChatAction.CHANGE_DETAILS):
+            collected.is_change_mode = True
             return ChatTurnResponse(
                 reply="Tell me what to change.",
                 state="collecting_details",
@@ -590,7 +636,7 @@ class ChatService:
                 collected=collected,
             )
 
-        # 3. Action: create_evaluation -> create only when confirmed
+        # 4. Action: create_evaluation -> create only when confirmed
         if request.action in ("create_evaluation", ChatAction.CREATE_EVALUATION):
             if not collected.title or not collected.category or len(collected.vendor_names or []) < 2:
                 raise HTTPException(
@@ -634,84 +680,189 @@ class ChatService:
                 links=links,
             )
 
-        # 4. Message parsing (if user sent a message)
+        # 5. Message parsing (if user sent a message)
         if request.message and request.message.strip():
             msg = request.message.strip()
-            try:
-                parsed: ParsedEvaluationDetails = await gemini_client.parse_evaluation_details(msg)
-            except GeminiClientError:
-                return ChatTurnResponse(
-                    reply="I had trouble understanding that. Please provide a title, category, and 2–3 vendor names to get started.",
-                    state="collecting_details",
-                    expect=ChatExpect(kind="text"),
-                    collected=collected,
-                )
 
-            # Check if category has choice from keywords
-            mapped_cat = None
-            has_choice = False
-            if parsed.category and parsed.category.strip():
-                mapped_cat, has_choice = map_category_text(parsed.category)
-            elif "housekeeping" in msg.lower() or "security" in msg.lower():
-                mapped_cat, has_choice = map_category_text(msg)
-            if has_choice:
-                # Merge title/location/vendors before returning choice
-                if parsed.title and parsed.title.strip():
-                    collected.title = parsed.title.strip()
-                if parsed.location and parsed.location.strip():
-                    loc_match = await match_location(session, company_id, parsed.location)
-                    if loc_match:
-                        collected.location_id = loc_match.id
-                if parsed.vendor_names:
-                    if len(parsed.vendor_names) >= 2:
-                        collected.vendor_names = [v.strip()[:80] for v in parsed.vendor_names[:3]]
+            if collected.awaiting_custom_category:
+                collected.category = msg[:60]
+                collected.awaiting_custom_category = False
+            elif msg.lower().strip() in ("no location", "none"):
+                collected.location_id = None
+                collected.no_location = True
+            else:
+                missing_fields: List[str] = []
+                if not collected.title or not collected.title.strip():
+                    missing_fields.append("title")
+                if not collected.category or not collected.category.strip():
+                    missing_fields.append("category")
+                if len(collected.vendor_names or []) < 2:
+                    missing_fields.append("vendors")
+                if company_locs and collected.location_id is None and not collected.no_location:
+                    missing_fields.append("location")
+
+                is_change = bool(collected.is_change_mode or msg.lower().startswith("change "))
+
+                try:
+                    parsed: ParsedEvaluationDetails = await gemini_client.parse_evaluation_details(
+                        msg,
+                        collected_details=collected.model_dump(),
+                        missing_fields=missing_fields,
+                    )
+                except GeminiClientError:
+                    return ChatTurnResponse(
+                        reply="I had trouble understanding that. Please provide a title, category, and 2–3 vendor names to get started.",
+                        state="collecting_details",
+                        expect=ChatExpect(kind="text"),
+                        collected=collected,
+                    )
+
+                # Title cleaning: strip "at <location>", "in <location>", "for <location>"
+                if parsed.location and parsed.title:
+                    loc_s = parsed.location.strip()
+                    parsed.title = re.sub(
+                        rf"\s+(?:at|in|for)\s+{re.escape(loc_s)}\b",
+                        "",
+                        parsed.title,
+                        flags=re.IGNORECASE,
+                    ).strip()
+
+                # Handle Category
+                raw_cat = parsed.category
+                if not raw_cat and (is_change or "category" in missing_fields):
+                    if "housekeeping" in msg.lower() or "security" in msg.lower() or "only category:" in msg.lower():
+                        raw_cat = msg
+
+                if raw_cat and (is_change or "category" in missing_fields):
+                    cat_lower = raw_cat.lower()
+                    has_hk = "housekeeping" in cat_lower
+                    has_sec = "security" in cat_lower
+                    if has_hk and has_sec:
+                        # Merge other mentioned fields before returning choice
+                        if is_change or "title" in missing_fields:
+                            if parsed.title and parsed.title.strip():
+                                collected.title = parsed.title.strip()
+                        if is_change or "vendors" in missing_fields:
+                            if parsed.vendor_names:
+                                if len(parsed.vendor_names) >= 2 or is_change:
+                                    collected.vendor_names = [v.strip()[:80] for v in parsed.vendor_names if v.strip()]
+                                else:
+                                    seen = {v.lower() for v in (collected.vendor_names or [])}
+                                    new_v = [v.strip()[:80] for v in parsed.vendor_names if v.strip() and v.strip().lower() not in seen]
+                                    collected.vendor_names = (collected.vendor_names or []) + new_v
+                        return ChatTurnResponse(
+                            reply="Did you mean Facilities / Housekeeping or Facilities / Security?",
+                            state="collecting_details",
+                            expect=ChatExpect(
+                                kind="choice",
+                                options=[
+                                    ChatChoiceOption(
+                                        action="select_category",
+                                        label="Facilities / Housekeeping",
+                                        value="Facilities / Housekeeping",
+                                    ),
+                                    ChatChoiceOption(
+                                        action="select_category",
+                                        label="Facilities / Security",
+                                        value="Facilities / Security",
+                                    ),
+                                ],
+                            ),
+                            collected=collected,
+                        )
+                    elif has_hk:
+                        collected.category = "Facilities / Housekeeping"
+                    elif has_sec:
+                        collected.category = "Facilities / Security"
+                    elif raw_cat.strip():
+                        collected.category = raw_cat.strip()[:60]
+
+                # Handle Location
+                if parsed.location and parsed.location.strip() and company_locs:
+                    loc_query = parsed.location.strip()
+                    if loc_query.lower() in ("no location", "none"):
+                        collected.location_id = None
+                        collected.no_location = True
                     else:
-                        seen = {v.lower() for v in (collected.vendor_names or [])}
-                        new_vendors = [v.strip()[:80] for v in parsed.vendor_names if v.strip() and v.strip().lower() not in seen]
-                        collected.vendor_names = (collected.vendor_names or []) + new_vendors
+                        matched_locs = find_location_matches(company_locs, loc_query)
+                        if len(matched_locs) == 1:
+                            collected.location_id = matched_locs[0].id
+                            collected.no_location = False
+                        elif len(matched_locs) > 1:
+                            # Several matches -> choice of those locations + "No location"
+                            if is_change or "title" in missing_fields:
+                                if parsed.title and parsed.title.strip():
+                                    collected.title = parsed.title.strip()
+                            if is_change or "vendors" in missing_fields:
+                                if parsed.vendor_names:
+                                    if len(parsed.vendor_names) >= 2 or is_change:
+                                        collected.vendor_names = [v.strip()[:80] for v in parsed.vendor_names if v.strip()]
+                                    else:
+                                        seen = {v.lower() for v in (collected.vendor_names or [])}
+                                        new_v = [v.strip()[:80] for v in parsed.vendor_names if v.strip() and v.strip().lower() not in seen]
+                                        collected.vendor_names = (collected.vendor_names or []) + new_v
+                            loc_opts = [
+                                ChatChoiceOption(
+                                    action="select_location",
+                                    label=f"{loc.name} ({loc.city})" if loc.city else loc.name,
+                                    value=str(loc.id),
+                                )
+                                for loc in matched_locs
+                            ]
+                            loc_opts.append(ChatChoiceOption(action="select_location", label="No location", value="none"))
+                            return ChatTurnResponse(
+                                reply="Which location did you mean?",
+                                state="collecting_details",
+                                expect=ChatExpect(kind="choice", options=loc_opts),
+                                collected=collected,
+                            )
+                        else:
+                            # Text given but no match -> reply "<text> isn't one of your saved locations." and expect choice of all company locations + "No location"
+                            if is_change or "title" in missing_fields:
+                                if parsed.title and parsed.title.strip():
+                                    collected.title = parsed.title.strip()
+                            if is_change or "vendors" in missing_fields:
+                                if parsed.vendor_names:
+                                    if len(parsed.vendor_names) >= 2 or is_change:
+                                        collected.vendor_names = [v.strip()[:80] for v in parsed.vendor_names if v.strip()]
+                                    else:
+                                        seen = {v.lower() for v in (collected.vendor_names or [])}
+                                        new_v = [v.strip()[:80] for v in parsed.vendor_names if v.strip() and v.strip().lower() not in seen]
+                                        collected.vendor_names = (collected.vendor_names or []) + new_v
+                            loc_opts = [
+                                ChatChoiceOption(
+                                    action="select_location",
+                                    label=f"{loc.name} ({loc.city})" if loc.city else loc.name,
+                                    value=str(loc.id),
+                                )
+                                for loc, _ in company_locs
+                            ]
+                            loc_opts.append(ChatChoiceOption(action="select_location", label="No location", value="none"))
+                            return ChatTurnResponse(
+                                reply=f"{loc_query} isn't one of your saved locations.",
+                                state="collecting_details",
+                                expect=ChatExpect(kind="choice", options=loc_opts),
+                                collected=collected,
+                            )
 
-                return ChatTurnResponse(
-                    reply="Did you mean Facilities / Housekeeping or Facilities / Security?",
-                    state="collecting_details",
-                    expect=ChatExpect(
-                        kind="choice",
-                        options=[
-                            ChatChoiceOption(
-                                action="select_category",
-                                label="Facilities / Housekeeping",
-                                value="Facilities / Housekeeping",
-                            ),
-                            ChatChoiceOption(
-                                action="select_category",
-                                label="Facilities / Security",
-                                value="Facilities / Security",
-                            ),
-                        ],
-                    ),
-                    collected=collected,
-                )
+                # Handle Title
+                if is_change or "title" in missing_fields:
+                    if parsed.title and parsed.title.strip():
+                        collected.title = parsed.title.strip()
 
-            # Update collected fields with parsed values (only fields mentioned change)
-            if parsed.title and parsed.title.strip():
-                collected.title = parsed.title.strip()
+                # Handle Vendors
+                if is_change or "vendors" in missing_fields:
+                    if parsed.vendor_names:
+                        if len(parsed.vendor_names) >= 2 or is_change:
+                            collected.vendor_names = [v.strip()[:80] for v in parsed.vendor_names if v.strip()]
+                        else:
+                            seen = {v.lower() for v in (collected.vendor_names or [])}
+                            new_v = [v.strip()[:80] for v in parsed.vendor_names if v.strip() and v.strip().lower() not in seen]
+                            collected.vendor_names = (collected.vendor_names or []) + new_v
 
-            if mapped_cat:
-                collected.category = mapped_cat
-            elif parsed.category and parsed.category.strip():
-                collected.category = parsed.category.strip()[:60]
+                if is_change:
+                    collected.is_change_mode = False
 
-            if parsed.location and parsed.location.strip():
-                loc_match = await match_location(session, company_id, parsed.location)
-                if loc_match:
-                    collected.location_id = loc_match.id
-
-            if parsed.vendor_names:
-                if len(parsed.vendor_names) >= 2:
-                    collected.vendor_names = [v.strip()[:80] for v in parsed.vendor_names]
-                else:
-                    seen = {v.lower() for v in (collected.vendor_names or [])}
-                    new_vendors = [v.strip()[:80] for v in parsed.vendor_names if v.strip() and v.strip().lower() not in seen]
-                    collected.vendor_names = (collected.vendor_names or []) + new_vendors
         elif not collected.title and not collected.category and len(collected.vendor_names or []) == 0:
             return ChatTurnResponse(
                 reply="To get started, what are you evaluating? Please provide a title, category (e.g. Housekeeping, Security), and 2–3 vendor names.",
@@ -720,11 +871,12 @@ class ChatService:
                 collected=collected,
             )
 
-        # Check required fields
+        # Field validation and next prompts
         has_title = bool(collected.title and collected.title.strip())
         has_category = bool(collected.category and collected.category.strip())
         vendor_names = collected.vendor_names or []
         vendor_count = len(vendor_names)
+        is_loc_resolved = bool(collected.location_id is not None or collected.no_location or not company_locs)
 
         if not has_title and not has_category and vendor_count == 0:
             return ChatTurnResponse(
@@ -743,25 +895,49 @@ class ChatService:
                 collected=collected,
             )
 
-        # Missing fields -> ask only for those
+        # Missing title or vendors:
         missing_parts: List[str] = []
         if not has_title:
             missing_parts.append("a title")
-        if not has_category:
-            missing_parts.append("a category (e.g. Housekeeping, Security)")
         if vendor_count == 0:
             missing_parts.append("2–3 vendor names")
         elif vendor_count == 1:
             missing_parts.append(f"at least one more vendor name to compare with {vendor_names[0]}")
 
-        if missing_parts:
-            if len(missing_parts) == 3:
+        if not has_category and missing_parts:
+            if not has_title and vendor_count < 2:
                 reply = "Please provide a title, category, and 2–3 vendor names to get started."
-            elif len(missing_parts) == 2:
+            elif not has_title:
+                reply = "Please provide a title and category (e.g. Housekeeping, Security)."
+            else:
+                reply = f"Please provide a category (e.g. Housekeeping, Security) and {missing_parts[0]}."
+            return ChatTurnResponse(
+                reply=reply,
+                state="collecting_details",
+                expect=ChatExpect(kind="text"),
+                collected=collected,
+            )
+
+        # Category missing when title and vendors are already present:
+        # Rule 8: "Nothing mentioned → expect choice: both options + "Other"; "Other" → expect text "Type your category." (1–60 chars)."
+        if not has_category:
+            options = [
+                ChatChoiceOption(action="select_category", label="Facilities / Housekeeping", value="Facilities / Housekeeping"),
+                ChatChoiceOption(action="select_category", label="Facilities / Security", value="Facilities / Security"),
+                ChatChoiceOption(action="select_category", label="Other", value="other"),
+            ]
+            return ChatTurnResponse(
+                reply="Which category is this evaluation for?",
+                state="collecting_details",
+                expect=ChatExpect(kind="choice", options=options),
+                collected=collected,
+            )
+
+        if missing_parts:
+            if len(missing_parts) == 2:
                 reply = f"Please provide {missing_parts[0]} and {missing_parts[1]}."
             else:
                 reply = f"Please provide {missing_parts[0]}."
-
             return ChatTurnResponse(
                 reply=reply,
                 state="collecting_details",
@@ -770,38 +946,31 @@ class ChatService:
             )
 
         # Location check:
-        # If title, category, and 2-3 vendors are known:
-        # If location not yet selected/matched and company has locations:
-        if collected.location_id is None and request.action not in ("select_location", ChatAction.SELECT_LOCATION):
-            company_locs = (
-                await CompanyRepository.list_locations_with_counts(session, company_id)
-                if company_id
-                else []
+        # Rule 5: "Nothing mentioned → before the confirm card, ask once with all company locations + "No location"."
+        if not is_loc_resolved:
+            loc_options = [
+                ChatChoiceOption(
+                    action="select_location",
+                    label=f"{loc.name} ({loc.city})" if loc.city else loc.name,
+                    value=str(loc.id),
+                )
+                for loc, _ in company_locs
+            ]
+            loc_options.append(
+                ChatChoiceOption(
+                    action="select_location",
+                    label="No location",
+                    value="none",
+                )
             )
-            if company_locs:
-                loc_options = [
-                    ChatChoiceOption(
-                        action="select_location",
-                        label=f"{loc.name} ({loc.city})" if loc.city else loc.name,
-                        value=str(loc.id),
-                    )
-                    for loc, _ in company_locs
-                ]
-                loc_options.append(
-                    ChatChoiceOption(
-                        action="select_location",
-                        label="No location",
-                        value="none",
-                    )
-                )
-                return ChatTurnResponse(
-                    reply="Which location is this evaluation for?",
-                    state="collecting_details",
-                    expect=ChatExpect(kind="choice", options=loc_options),
-                    collected=collected,
-                )
+            return ChatTurnResponse(
+                reply="Which location is this evaluation for?",
+                state="collecting_details",
+                expect=ChatExpect(kind="choice", options=loc_options),
+                collected=collected,
+            )
 
-        # 5. All details known -> state confirm_details
+        # Confirm details card
         loc_display = "None"
         if collected.location_id and company_id:
             loc_obj = await CompanyRepository.get_location(session, company_id, collected.location_id)

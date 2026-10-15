@@ -238,11 +238,21 @@ def build_analyse_vendor_prompt(
     )
 
 
-def build_parse_details_prompt(user_message: str) -> str:
-    prompt_path = PROMPTS_DIR / "parse_details_v2.txt"
+def build_parse_details_prompt(
+    user_message: str,
+    collected_details: Optional[Dict[str, Any]] = None,
+    missing_fields: Optional[List[str]] = None,
+) -> str:
+    prompt_path = PROMPTS_DIR / "parse_details_v3.txt"
     template = prompt_path.read_text(encoding="utf-8")
     safe_message = (user_message or "")[:1000]
-    return template.replace("{user_message}", safe_message)
+    coll_str = ", ".join(f"{k}={v}" for k, v in (collected_details or {}).items() if v) or "None"
+    missing_str = ", ".join(missing_fields or []) or "None"
+    return (
+        template.replace("{user_message}", safe_message)
+        .replace("{collected_context}", coll_str)
+        .replace("{missing_context}", missing_str)
+    )
 
 
 class GeminiClient(ABC):
@@ -271,9 +281,12 @@ class GeminiClient(ABC):
 
     @abstractmethod
     async def parse_evaluation_details(
-        self, user_message: str
+        self,
+        user_message: str,
+        collected_details: Optional[Dict[str, Any]] = None,
+        missing_fields: Optional[List[str]] = None,
     ) -> ParsedEvaluationDetails:
-        """Parse evaluation title, category, and vendor names from user message."""
+        """Parse evaluation title, category, location, and vendor names from user message."""
         ...
 
 
@@ -480,9 +493,12 @@ class GoogleGenAIClient(GeminiClient):
         return result
 
     async def parse_evaluation_details(
-        self, user_message: str
+        self,
+        user_message: str,
+        collected_details: Optional[Dict[str, Any]] = None,
+        missing_fields: Optional[List[str]] = None,
     ) -> ParsedEvaluationDetails:
-        prompt = build_parse_details_prompt(user_message)
+        prompt = build_parse_details_prompt(user_message, collected_details, missing_fields)
         result = await self._call_with_retries_and_validation(
             operation_name="parse_evaluation_details",
             contents=[prompt],
@@ -688,13 +704,16 @@ class FakeGeminiClient(GeminiClient):
             self.in_flight -= 1
 
     async def parse_evaluation_details(
-        self, user_message: str
+        self,
+        user_message: str,
+        collected_details: Optional[Dict[str, Any]] = None,
+        missing_fields: Optional[List[str]] = None,
     ) -> ParsedEvaluationDetails:
         self.details_call_count += 1
         if self.details_handler is not None:
             return self.details_handler(user_message)
 
-        msg_lower = user_message.lower()
+        msg_lower = user_message.lower().strip()
 
         # Check prompt injection: ignore instructions inside message and extract only legitimate details
         if "ignore previous instructions" in msg_lower or "ignore all instructions" in msg_lower:
@@ -706,10 +725,62 @@ class FakeGeminiClient(GeminiClient):
                 )
             return ParsedEvaluationDetails(title=None, category=None, vendor_names=[])
 
+        # Explicit test markers
+        if "only title:" in msg_lower:
+            return ParsedEvaluationDetails(
+                title=user_message.split("only title:", 1)[1].strip(),
+                category=None,
+                location=None,
+                vendor_names=[],
+            )
+
+        if "only category:" in msg_lower:
+            return ParsedEvaluationDetails(
+                title=None,
+                category=user_message.split("only category:", 1)[1].strip(),
+                location=None,
+                vendor_names=[],
+            )
+
+        if "only location:" in msg_lower:
+            return ParsedEvaluationDetails(
+                title=None,
+                category=None,
+                location=user_message.split("only location:", 1)[1].strip(),
+                vendor_names=[],
+            )
+
+        if "only vendors:" in msg_lower:
+            v_items = [v.strip() for v in user_message.split("only vendors:", 1)[1].strip().split(",") if v.strip()]
+            return ParsedEvaluationDetails(title=None, category=None, location=None, vendor_names=v_items)
+
+        # "test 2 at worli" case
+        if "test 2 at worli" in msg_lower:
+            return ParsedEvaluationDetails(
+                title="test 2",
+                location="Worli",
+                category=None,
+                vendor_names=[],
+            )
+
+        # Standalone short replies (answering specific single questions)
+        if msg_lower in ("security", "housekeeping", "pantry", "pest control", "facilities", "pantry amc"):
+            return ParsedEvaluationDetails(title=None, category=user_message.strip(), location=None, vendor_names=[])
+
+        if msg_lower in ("andheri", "mumbai", "powai", "bkc", "delhi", "pune", "headquarters"):
+            return ParsedEvaluationDetails(title=None, category=None, location=user_message.strip(), vendor_names=[])
+
+        if msg_lower in ("no location", "none"):
+            return ParsedEvaluationDetails(title=None, category=None, location="none", vendor_names=[])
+
+        # Change details or location Powai
+        if "location powai" in msg_lower or (msg_lower.startswith("location") and "powai" in msg_lower):
+            return ParsedEvaluationDetails(title=None, category=None, location="Powai", vendor_names=[])
+
         # Content-based parsing for tests:
-        title = None
-        category = None
-        location = None
+        title: Optional[str] = None
+        category: Optional[str] = None
+        location: Optional[str] = None
         vendors: List[str] = []
 
         if "housekeeping" in msg_lower and "security" in msg_lower:
@@ -727,7 +798,7 @@ class FakeGeminiClient(GeminiClient):
 
         if "location:" in msg_lower:
             location = user_message.split("location:", 1)[1].strip()
-        elif "andheri" in msg_lower:
+        elif "andheri east" in msg_lower or "andheri" in msg_lower:
             location = "Andheri East Office"
         elif "mumbai" in msg_lower:
             location = "Mumbai"
@@ -737,24 +808,8 @@ class FakeGeminiClient(GeminiClient):
             location = "Powai Campus"
         elif "delhi" in msg_lower:
             location = "Delhi"
-
-        # Explicit test markers
-        if "only title:" in msg_lower:
-            title = user_message.split("only title:", 1)[1].strip()
-            return ParsedEvaluationDetails(title=title, category=None, location=None, vendor_names=[])
-
-        if "only category:" in msg_lower:
-            category = user_message.split("only category:", 1)[1].strip()
-            return ParsedEvaluationDetails(title=None, category=category, location=None, vendor_names=[])
-
-        if "only location:" in msg_lower:
-            location = user_message.split("only location:", 1)[1].strip()
-            return ParsedEvaluationDetails(title=None, category=None, location=location, vendor_names=[])
-
-        if "only vendors:" in msg_lower:
-            v_str = user_message.split("only vendors:", 1)[1].strip()
-            vendors = [v.strip() for v in v_str.split(",") if v.strip()]
-            return ParsedEvaluationDetails(title=None, category=None, location=None, vendor_names=vendors)
+        elif "pune" in msg_lower:
+            location = "Pune"
 
         # 4 vendors case for testing "4 vendors -> asks to choose"
         if "4 vendors" in msg_lower or ("vendor a" in msg_lower and "vendor d" in msg_lower) or "four vendors" in msg_lower:
@@ -775,9 +830,16 @@ class FakeGeminiClient(GeminiClient):
             vendors = ["Vendor 1", "Vendor 2"]
             title = "Facilities AMC"
             category = category or "Facilities"
+        elif "vendor a" in msg_lower and "vendor b" in msg_lower:
+            vendors = ["Vendor A", "Vendor B"]
 
-        if not title and (category or vendors):
-            title = f"{category or 'Vendor'} Evaluation"
+        if not title:
+            # If user message provides a clear title phrase or evaluate sentence
+            if msg_lower.startswith("evaluate ") or "rfp" in msg_lower:
+                first_part = user_message.split("between", 1)[0].strip()
+                if first_part.lower().startswith("evaluate "):
+                    first_part = first_part[9:].strip()
+                title = first_part or "Vendor Evaluation"
 
         return ParsedEvaluationDetails(
             title=title,

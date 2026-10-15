@@ -428,6 +428,21 @@ export interface components {
             location_id?: string | null;
             /** Vendor Names */
             vendor_names?: string[] | null;
+            /**
+             * No Location
+             * @default false
+             */
+            no_location: boolean | null;
+            /**
+             * Is Change Mode
+             * @default false
+             */
+            is_change_mode: boolean | null;
+            /**
+             * Awaiting Custom Category
+             * @default false
+             */
+            awaiting_custom_category: boolean | null;
         };
         /** ChatDocumentSlot */
         ChatDocumentSlot: {
