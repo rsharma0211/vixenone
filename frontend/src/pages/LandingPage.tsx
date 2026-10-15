@@ -305,7 +305,7 @@ export const LandingPage: React.FC = () => {
             <div className="lg:col-span-6 space-y-6">
               <Reveal delay={0} reducedMotion={prefersReducedMotion}>
                 <div className="inline-flex items-center rounded-full bg-accent text-navy text-xs font-semibold px-3 py-1 select-none">
-                  For facilities & procurement teams
+                AI powered business operation platform
                 </div>
               </Reveal>
 
