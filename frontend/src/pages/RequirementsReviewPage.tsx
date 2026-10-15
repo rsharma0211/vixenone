@@ -1,7 +1,6 @@
-import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { useParams, useNavigate, useOutletContext } from 'react-router-dom';
 import {
-  Plus,
   Pencil,
   Trash2,
   FileText,
@@ -17,7 +16,6 @@ import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { EvaluationTabHeader } from '@/components/EvaluationTabHeader';
-import { RerunExtractionDialog } from '@/components/RerunExtractionDialog';
 import { useUnsavedChangesGuard } from '@/components/UnsavedChangesGuard';
 import {
   Tooltip,
@@ -74,47 +72,6 @@ export function formatRequirementSource(
   return '—';
 }
 
-export function generateNextRequirementCode(existingCodes: string[]): string {
-  const existingUpper = new Set(existingCodes.map((c) => c.trim().toUpperCase()));
-
-  for (let i = existingCodes.length - 1; i >= 0; i--) {
-    const raw = existingCodes[i].trim();
-    const match = raw.match(/^(.*?)(\d+)$/);
-    if (match) {
-      const prefix = match[1];
-      const numStr = match[2];
-      const width = numStr.length;
-
-      // Find highest number sharing the same prefix (case-insensitive)
-      let maxNum = parseInt(numStr, 10);
-      for (const code of existingCodes) {
-        const m = code.trim().match(/^(.*?)(\d+)$/);
-        if (m && m[1].toUpperCase() === prefix.toUpperCase()) {
-          const val = parseInt(m[2], 10);
-          if (!isNaN(val) && val > maxNum) {
-            maxNum = val;
-          }
-        }
-      }
-
-      let candidateNum = maxNum + 1;
-      let candidate = `${prefix}${String(candidateNum).padStart(width, '0')}`;
-      while (existingUpper.has(candidate.toUpperCase())) {
-        candidateNum += 1;
-        candidate = `${prefix}${String(candidateNum).padStart(width, '0')}`;
-      }
-      return candidate;
-    }
-  }
-
-  let fallbackNum = existingCodes.length + 1;
-  let fallback = `REQ-${String(fallbackNum).padStart(2, '0')}`;
-  while (existingUpper.has(fallback.toUpperCase())) {
-    fallbackNum += 1;
-    fallback = `REQ-${String(fallbackNum).padStart(2, '0')}`;
-  }
-  return fallback;
-}
 
 function parseOptionalPage(val: string | number | null | undefined): number | null {
   if (val === null || val === undefined || String(val).trim() === '') {
@@ -174,11 +131,9 @@ export const RequirementsReviewPage: React.FC = () => {
   const [loading, setLoading] = useState<boolean>(true);
   const [hasLoaded, setHasLoaded] = useState<boolean>(false);
   const [saving, setSaving] = useState<boolean>(false);
-  const [rerunning, setRerunning] = useState<boolean>(false);
   const [errorBanner, setErrorBanner] = useState<string | null>(null);
   const [successBanner, setSuccessBanner] = useState<string | null>(null);
   const [serverErrors, setServerErrors] = useState<Record<string, string>>({});
-  const [showRerunDialog, setShowRerunDialog] = useState<boolean>(false);
   const [rowToDelete, setRowToDelete] = useState<{ localId: string; code: string } | null>(null);
 
   // Analysis state
@@ -189,8 +144,6 @@ export const RequirementsReviewPage: React.FC = () => {
   const [analyseError, setAnalyseError] = useState<string | null>(null);
   const [showRerunAnalysisDialog, setShowRerunAnalysisDialog] = useState<boolean>(false);
   const [hasResults, setHasResults] = useState<boolean>(false);
-
-  const nextLocalIdCounter = useRef<number>(1);
 
   useEffect(() => {
     let active = true;
@@ -258,7 +211,7 @@ export const RequirementsReviewPage: React.FC = () => {
   }, [rows, initialItems, initialByLocalId, loading, hasLoaded]);
 
   // Unsaved edits: warn on reload/close and block every in-app navigation
-  const { guardDialog, allowNavigation } = useUnsavedChangesGuard(isDirty);
+  const { guardDialog } = useUnsavedChangesGuard(isDirty);
 
   // Client validation: code and text required; codes unique within list
   const validationErrors = useMemo(() => {
@@ -293,27 +246,6 @@ export const RequirementsReviewPage: React.FC = () => {
   const isValid = Object.keys(validationErrors).length === 0;
   const canSave = isDirty && isValid && !saving;
 
-  // Determine effective origin for a row
-  const getEffectiveOrigin = useCallback(
-    (row: EditableRequirementRow): RequirementOrigin => {
-      const initial = initialByLocalId.get(row.localId);
-      if (isRowUnchanged(row, initial) && initial) {
-        return initial.origin;
-      }
-      return 'user';
-    },
-    [initialByLocalId]
-  );
-
-  // Whether any row has origin === 'user' (saved or locally edited/added)
-  const hasAnyUserOriginRow = useMemo(() => {
-    const savedHasUser = initialItems.some((item) => item.origin === 'user');
-    const currentHasUser = rows.some((row) => getEffectiveOrigin(row) === 'user');
-    return savedHasUser || currentHasUser;
-  }, [initialItems, rows, getEffectiveOrigin]);
-
-  // A re-run replaces the whole list: warn when that discards user work
-  const rerunWillLoseEdits = isDirty || hasAnyUserOriginRow;
 
   // Row edit handlers
   const handleStartRowEdit = (row: EditableRequirementRow) => {
@@ -377,33 +309,6 @@ export const RequirementsReviewPage: React.FC = () => {
     setRows((prev) =>
       prev.map((r) => (r.localId === localId ? { ...r, [field]: value } : r))
     );
-  };
-
-  const handleAddRow = () => {
-    setSuccessBanner(null);
-    setServerErrors({});
-    const nextCode = generateNextRequirementCode(rows.map((r) => r.code));
-    const newLocalId = `new-req-${nextLocalIdCounter.current++}`;
-    const newRow: EditableRequirementRow = {
-      localId: newLocalId,
-      id: null,
-      code: nextCode,
-      text: '',
-      category: '',
-      mandatory: false,
-      acceptance: '',
-      source_document_id: null,
-      source_page: '',
-      source_section: '',
-      origin: 'user',
-      isNew: true,
-    };
-    setRows((prev) => [...prev, newRow]);
-    setEditingRowIds((prev) => {
-      const next = new Set(prev);
-      next.add(newLocalId);
-      return next;
-    });
   };
 
   const handleDeleteRow = (localId: string) => {
@@ -480,49 +385,6 @@ export const RequirementsReviewPage: React.FC = () => {
     }
   };
 
-  // Re-run extraction: always confirmed first, then sent with confirm_replace true
-  const executeRerunExtraction = async () => {
-    if (!evaluationId) return;
-    try {
-      setRerunning(true);
-      setErrorBanner(null);
-      setSuccessBanner(null);
-
-      await apiClient.extractRequirements(evaluationId, { confirm_replace: true });
-
-      await outletContext?.refresh();
-
-      // The confirmed re-run intentionally discards any unsaved edits
-      allowNavigation();
-      navigate(`/evaluations/${evaluationId}/documents`, {
-        state: { fromExtractStart: true },
-      });
-    } catch (err: unknown) {
-      if (err instanceof ApiHttpError && err.status === 409) {
-        // A job is already active: the Documents tab shows its progress
-        allowNavigation();
-        navigate(`/evaluations/${evaluationId}/documents`, {
-          state: { fromExtractStart: true },
-        });
-      } else if (err instanceof Error) {
-        // Includes 422 messages naming what is missing, shown as-is
-        setErrorBanner(err.message);
-      } else {
-        setErrorBanner('Failed to start extraction');
-      }
-    } finally {
-      setRerunning(false);
-    }
-  };
-
-  const handleClickRerunExtraction = () => {
-    setShowRerunDialog(true);
-  };
-
-  const handleConfirmRerunExtraction = async () => {
-    setShowRerunDialog(false);
-    await executeRerunExtraction();
-  };
 
   useEffect(() => {
     if (evaluation?.latest_job !== undefined) {
@@ -696,28 +558,6 @@ export const RequirementsReviewPage: React.FC = () => {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={handleAddRow}
-                disabled={saving || rerunning}
-                className="gap-1.5 shrink-0"
-              >
-                <Plus className="w-4 h-4" />
-                <span>Add requirement</span>
-              </Button>
-
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleClickRerunExtraction}
-                disabled={saving || rerunning}
-                className="gap-1.5 shrink-0"
-              >
-                <RefreshCw className="w-3.5 h-3.5" />
-                <span>{rerunning ? 'Starting...' : 'Re-run extraction'}</span>
-              </Button>
-
-              <Button
-                variant="outline"
-                size="sm"
                 onClick={handleSave}
                 disabled={!canSave}
                 className="font-semibold shrink-0"
@@ -752,7 +592,7 @@ export const RequirementsReviewPage: React.FC = () => {
                 <Button
                   variant="primary"
                   size="sm"
-                  disabled={jobActive || startingAnalysis || saving || rerunning}
+                  disabled={jobActive || startingAnalysis || saving}
                   onClick={handleClickRunAnalysis}
                   className="gap-1.5 font-semibold shrink-0"
                 >
@@ -846,25 +686,6 @@ export const RequirementsReviewPage: React.FC = () => {
               <h3 className="text-base font-semibold text-text">
                 No requirements found
               </h3>
-              <p className="text-sm text-muted">
-                Add a requirement manually or re-run extraction from your uploaded requirements document.
-              </p>
-            </div>
-            <div className="flex items-center justify-center gap-3 pt-1">
-              <Button variant="outline" size="sm" onClick={handleAddRow} className="gap-1.5">
-                <Plus className="w-4 h-4" />
-                <span>Add requirement</span>
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleClickRerunExtraction}
-                disabled={rerunning}
-                className="gap-1.5"
-              >
-                <RefreshCw className="w-3.5 h-3.5" />
-                <span>Re-run extraction</span>
-              </Button>
             </div>
           </div>
         ) : (
@@ -1130,14 +951,6 @@ export const RequirementsReviewPage: React.FC = () => {
           </div>
         )}
 
-        {/* Re-run extraction: always confirm */}
-        <RerunExtractionDialog
-          open={showRerunDialog}
-          hasEdits={rerunWillLoseEdits}
-          busy={rerunning}
-          onConfirm={handleConfirmRerunExtraction}
-          onCancel={() => setShowRerunDialog(false)}
-        />
 
         {/* Delete requirement row: confirm first */}
         <ConfirmDialog
