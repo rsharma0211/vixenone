@@ -42,3 +42,14 @@ export type CostBreakdownResponse = Schemas['CostBreakdownResponse'];
 export type CriterionScoreRow = Schemas['CriterionScoreRow'];
 export type CriterionScoreCell = Schemas['CriterionScoreCell'];
 export type VendorTotalResult = Schemas['VendorTotalResult'];
+
+// Chat
+export type ChatTurnRequest = Schemas['ChatTurnRequest'];
+export type ChatTurnResponse = Schemas['ChatTurnResponse'];
+export type ChatExpect = Schemas['ChatExpect'];
+export type ChatChoiceOption = Schemas['ChatChoiceOption'];
+export type ChatSummary = Schemas['ChatSummary'];
+export type ChatVendorSummary = Schemas['ChatVendorSummary'];
+export type ChatJobInfo = Schemas['ChatJobInfo'];
+export type ChatAction = Schemas['ChatAction'];
+export type ChatCollectedDetails = Schemas['ChatCollectedDetails'];

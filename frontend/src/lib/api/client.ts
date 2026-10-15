@@ -12,6 +12,8 @@ import type {
   ExtractRequirementsRequest,
   AnalysisJobResponse,
   EvaluationResultsResponse,
+  ChatTurnRequest,
+  ChatTurnResponse,
   Schemas,
 } from '@/lib/types';
 
@@ -569,6 +571,20 @@ class ApiClient {
       }
     );
     return this.handleResponse<EvaluationResultsResponse>(response);
+  }
+
+  // --- Chat ---
+  async chatTurn(payload: ChatTurnRequest): Promise<ChatTurnResponse> {
+    const headers = await this.getAuthHeader();
+    const response = await fetch(`${BASE_URL}/api/chat/turn`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...headers,
+      },
+      body: JSON.stringify(payload),
+    });
+    return this.handleResponse<ChatTurnResponse>(response);
   }
 }
 

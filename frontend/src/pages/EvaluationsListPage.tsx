@@ -23,6 +23,7 @@ import { getEvaluationEntryPath } from '@/lib/evaluationRouting';
 import { LifecycleStatus } from '@/components/status/LifecycleStatus';
 import { KpiTile } from '@/components/KpiTile';
 import { KPI_HELP_TEXT } from '@/lib/kpiHelp';
+import { EVALUATION_CHANGED_EVENT } from '@/lib/events';
 import type {
   EvaluationsListResponse,
   EvaluationSummaryResponse,
@@ -69,6 +70,13 @@ export const EvaluationsListPage: React.FC = () => {
 
   useEffect(() => {
     fetchEvaluations();
+    const handleChanged = () => {
+      fetchEvaluations();
+    };
+    window.addEventListener(EVALUATION_CHANGED_EVENT, handleChanged);
+    return () => {
+      window.removeEventListener(EVALUATION_CHANGED_EVENT, handleChanged);
+    };
   }, [fetchEvaluations]);
 
   const handleTileClick = (filter: KpiFilter) => {

@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { NavLink, Outlet, useParams, Link } from 'react-router-dom';
 import { apiClient } from '@/lib/api/client';
 import { cn } from '@/lib/utils';
+import { EVALUATION_CHANGED_EVENT } from '@/lib/events';
 import type { EvaluationDetailResponse } from '@/lib/types';
 
 export interface EvaluationLayoutContext {
@@ -18,6 +19,21 @@ export const EvaluationLayout: React.FC = () => {
   const [savedRequirementCount, setSavedRequirementCount] = useState<number>(0);
   const [savedMandatoryCount, setSavedMandatoryCount] = useState<number>(0);
 
+  const refresh = useCallback(async () => {
+    if (!id) return;
+    try {
+      const [detail, reqs] = await Promise.all([
+        apiClient.getEvaluation(id),
+        apiClient.getRequirements(id).catch(() => []),
+      ]);
+      setDetail(detail);
+      setSavedRequirementCount(reqs.length);
+      setSavedMandatoryCount(reqs.filter((r) => r.mandatory).length);
+    } catch {
+      // Preserve current header state on error
+    }
+  }, [id]);
+
   useEffect(() => {
     let active = true;
     if (id) {
@@ -33,25 +49,20 @@ export const EvaluationLayout: React.FC = () => {
         })
         .catch(() => {});
     }
+
+    const handleChanged = (event: Event) => {
+      const custom = event as CustomEvent<{ evaluationId?: string | null }>;
+      if (!custom.detail?.evaluationId || custom.detail.evaluationId === id) {
+        refresh();
+      }
+    };
+    window.addEventListener(EVALUATION_CHANGED_EVENT, handleChanged);
+
     return () => {
       active = false;
+      window.removeEventListener(EVALUATION_CHANGED_EVENT, handleChanged);
     };
-  }, [id]);
-
-  const refresh = useCallback(async () => {
-    if (!id) return;
-    try {
-      const [detail, reqs] = await Promise.all([
-        apiClient.getEvaluation(id),
-        apiClient.getRequirements(id).catch(() => []),
-      ]);
-      setDetail(detail);
-      setSavedRequirementCount(reqs.length);
-      setSavedMandatoryCount(reqs.filter((r) => r.mandatory).length);
-    } catch {
-      // Preserve current header state on error
-    }
-  }, [id]);
+  }, [id, refresh]);
 
   const outletContext = useMemo<EvaluationLayoutContext>(
     () => ({

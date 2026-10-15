@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { useParams, Link, useOutletContext } from 'react-router-dom';
 import {
   Printer,
@@ -22,6 +22,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { FindingStatusBadge } from '@/components/status/FindingStatusBadge';
+import { EVALUATION_CHANGED_EVENT } from '@/lib/events';
 import { cn } from '@/lib/utils';
 import type { EvaluationLayoutContext } from '@/components/layout/EvaluationLayout';
 import type {
@@ -51,48 +52,51 @@ export const RecommendationPage: React.FC = () => {
   const [copiedAll, setCopiedAll] = useState<boolean>(false);
   const [copiedItem, setCopiedItem] = useState<string | null>(null);
 
+  const loadResults = useCallback(async (evalId: string) => {
+    try {
+      setLoading(true);
+      setError(null);
+      const data = await apiClient.getResults(evalId);
+      setResults(data);
+
+      const initial: Record<string, number> = {};
+      data.scoring.forEach((row) => {
+        initial[row.criterion_key] = row.weight;
+      });
+      setWeights(initial);
+      setSavedWeights(initial);
+
+      const initialOpen: Record<string, boolean> = {};
+      data.vendors.forEach((v) => {
+        const qs = data.clarifications[v.id] || [];
+        initialOpen[v.id] = qs.length > 0;
+      });
+      setOpenClarifications(initialOpen);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load results');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
   // Fetch results on mount and id change
   useEffect(() => {
-    let active = true;
-    if (!id) return;
+    if (id) {
+      loadResults(id);
+    }
 
-    setLoading(true);
-    setError(null);
-
-    apiClient
-      .getResults(id)
-      .then((data) => {
-        if (!active) return;
-        setResults(data);
-
-        // Populate initial weights from scoring snapshot
-        const initial: Record<string, number> = {};
-        data.scoring.forEach((row) => {
-          initial[row.criterion_key] = row.weight;
-        });
-        setWeights(initial);
-        setSavedWeights(initial);
-
-        // Default open clarifications for vendors that have questions
-        const initialOpen: Record<string, boolean> = {};
-        data.vendors.forEach((v) => {
-          const qs = data.clarifications[v.id] || [];
-          initialOpen[v.id] = qs.length > 0;
-        });
-        setOpenClarifications(initialOpen);
-
-        setLoading(false);
-      })
-      .catch((err) => {
-        if (!active) return;
-        setError(err instanceof Error ? err.message : 'Failed to load results');
-        setLoading(false);
-      });
+    const handleChanged = (e: Event) => {
+      const custom = e as CustomEvent<{ evaluationId?: string | null }>;
+      if (!custom.detail?.evaluationId || custom.detail.evaluationId === id) {
+        if (id) loadResults(id);
+      }
+    };
+    window.addEventListener(EVALUATION_CHANGED_EVENT, handleChanged);
 
     return () => {
-      active = false;
+      window.removeEventListener(EVALUATION_CHANGED_EVENT, handleChanged);
     };
-  }, [id]);
+  }, [id, loadResults]);
 
   // Determine if weights are modified
   const isDirty = useMemo(() => {

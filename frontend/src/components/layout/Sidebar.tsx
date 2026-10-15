@@ -12,6 +12,7 @@ import {
 } from '@/components/ui/tooltip';
 import { apiClient } from '@/lib/api/client';
 import { getEvaluationEntryPath } from '@/lib/evaluationRouting';
+import { EVALUATION_CHANGED_EVENT } from '@/lib/events';
 import type { EvaluationSummaryResponse } from '@/lib/types';
 
 interface SidebarProps {
@@ -26,17 +27,28 @@ export const Sidebar: React.FC<SidebarProps> = ({ collapsed }) => {
 
   useEffect(() => {
     let isMounted = true;
-    apiClient.listEvaluations()
-      .then((data) => {
-        if (isMounted && data.evaluations) {
-          setRecentEvaluations(data.evaluations.slice(0, 3));
-        }
-      })
-      .catch(() => {
-        // Silently ignore sidebar recent fetch errors
-      });
+    const fetchRecent = () => {
+      apiClient.listEvaluations()
+        .then((data) => {
+          if (isMounted && data.evaluations) {
+            setRecentEvaluations(data.evaluations.slice(0, 3));
+          }
+        })
+        .catch(() => {
+          // Silently ignore sidebar recent fetch errors
+        });
+    };
+
+    fetchRecent();
+
+    const handleChanged = () => {
+      fetchRecent();
+    };
+    window.addEventListener(EVALUATION_CHANGED_EVENT, handleChanged);
+
     return () => {
       isMounted = false;
+      window.removeEventListener(EVALUATION_CHANGED_EVENT, handleChanged);
     };
   }, [location.pathname]);
 

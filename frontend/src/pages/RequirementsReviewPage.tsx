@@ -17,6 +17,7 @@ import { Switch } from '@/components/ui/switch';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { EvaluationTabHeader } from '@/components/EvaluationTabHeader';
 import { useUnsavedChangesGuard } from '@/components/UnsavedChangesGuard';
+import { EVALUATION_CHANGED_EVENT } from '@/lib/events';
 import {
   Tooltip,
   TooltipContent,
@@ -152,31 +153,44 @@ export const RequirementsReviewPage: React.FC = () => {
     setLoading(true);
     setErrorBanner(null);
 
-    apiClient
-      .getRequirements(evaluationId)
-      .then((reqs) => {
-        if (!active) return;
-        setInitialItems(reqs);
-        setRows(reqs.map((item, idx) => mapItemToEditableRow(item, idx)));
-        setEditingRowIds(new Set());
-        setRowBackups({});
-        setServerErrors({});
-        setHasLoaded(true);
-      })
-      .catch((err: unknown) => {
-        if (!active) return;
-        setErrorBanner(
-          err instanceof Error ? err.message : 'Failed to load requirements'
-        );
-      })
-      .finally(() => {
-        if (active) {
-          setLoading(false);
-        }
-      });
+    const fetchReqs = () => {
+      apiClient
+        .getRequirements(evaluationId)
+        .then((reqs) => {
+          if (!active) return;
+          setInitialItems(reqs);
+          setRows(reqs.map((item, idx) => mapItemToEditableRow(item, idx)));
+          setEditingRowIds(new Set());
+          setRowBackups({});
+          setServerErrors({});
+          setHasLoaded(true);
+        })
+        .catch((err: unknown) => {
+          if (!active) return;
+          setErrorBanner(
+            err instanceof Error ? err.message : 'Failed to load requirements'
+          );
+        })
+        .finally(() => {
+          if (active) {
+            setLoading(false);
+          }
+        });
+    };
+
+    fetchReqs();
+
+    const handleChanged = (e: Event) => {
+      const custom = e as CustomEvent<{ evaluationId?: string | null }>;
+      if (!custom.detail?.evaluationId || custom.detail.evaluationId === evaluationId) {
+        fetchReqs();
+      }
+    };
+    window.addEventListener(EVALUATION_CHANGED_EVENT, handleChanged);
 
     return () => {
       active = false;
+      window.removeEventListener(EVALUATION_CHANGED_EVENT, handleChanged);
     };
   }, [evaluationId]);
 

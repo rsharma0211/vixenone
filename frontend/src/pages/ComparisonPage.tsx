@@ -2,6 +2,7 @@ import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { useParams, Link, useOutletContext } from 'react-router-dom';
 import { RefreshCw, AlertTriangle, Flag, ArrowRight } from 'lucide-react';
 import { apiClient } from '@/lib/api/client';
+import { EVALUATION_CHANGED_EVENT } from '@/lib/events';
 import { VendorSummaryCards } from '@/components/VendorSummaryCards';
 import { FindingStatusBadge } from '@/components/status/FindingStatusBadge';
 import { RiskBadge } from '@/components/status/RiskBadge';
@@ -64,6 +65,16 @@ export const ComparisonPage: React.FC = () => {
     if (evaluationId) {
       loadData(evaluationId);
     }
+    const handleChanged = (e: Event) => {
+      const custom = e as CustomEvent<{ evaluationId?: string | null }>;
+      if (!custom.detail?.evaluationId || custom.detail.evaluationId === evaluationId) {
+        if (evaluationId) loadData(evaluationId);
+      }
+    };
+    window.addEventListener(EVALUATION_CHANGED_EVENT, handleChanged);
+    return () => {
+      window.removeEventListener(EVALUATION_CHANGED_EVENT, handleChanged);
+    };
   }, [evaluationId, loadData]);
 
   // Keep latest job in sync

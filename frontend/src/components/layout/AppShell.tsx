@@ -10,6 +10,7 @@ import {
   SheetDescription,
 } from '@/components/ui/sheet';
 import { cn } from '@/lib/utils';
+import { AskVixenWidget } from '@/components/chat/AskVixenWidget';
 
 interface DrawerContextType {
   openDrawer: (title?: string, content?: React.ReactNode) => void;
@@ -106,6 +107,9 @@ export const AppShell: React.FC = () => {
             </div>
           </SheetContent>
         </Sheet>
+
+        {/* Floating Ask Vixen Widget */}
+        <AskVixenWidget />
       </div>
     </DrawerContext.Provider>
   );

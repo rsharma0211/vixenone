@@ -9,6 +9,7 @@ import { DocumentSlot, DocumentSlotError } from '@/components/DocumentSlot';
 import { RerunExtractionDialog } from '@/components/RerunExtractionDialog';
 import type { EvaluationLayoutContext } from '@/components/layout/EvaluationLayout';
 import { isJobActive } from '@/lib/evaluationRouting';
+import { EVALUATION_CHANGED_EVENT } from '@/lib/events';
 import type {
   AnalysisJobResponse,
   DocumentResponse,
@@ -133,10 +134,19 @@ export const DocumentsPage: React.FC = () => {
         if (active) setLoading(false);
       });
 
+    const handleChanged = (e: Event) => {
+      const custom = e as CustomEvent<{ evaluationId?: string | null }>;
+      if (!custom.detail?.evaluationId || custom.detail.evaluationId === evaluationId) {
+        reloadDetail();
+      }
+    };
+    window.addEventListener(EVALUATION_CHANGED_EVENT, handleChanged);
+
     return () => {
       active = false;
+      window.removeEventListener(EVALUATION_CHANGED_EVENT, handleChanged);
     };
-  }, [evaluationId, navigate, refreshLayout]);
+  }, [evaluationId, navigate, refreshLayout, reloadDetail]);
 
   const jobActive = isJobActive(latestJob);
 
