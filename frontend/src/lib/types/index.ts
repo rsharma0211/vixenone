@@ -51,5 +51,11 @@ export type ChatChoiceOption = Schemas['ChatChoiceOption'];
 export type ChatSummary = Schemas['ChatSummary'];
 export type ChatVendorSummary = Schemas['ChatVendorSummary'];
 export type ChatJobInfo = Schemas['ChatJobInfo'];
-export type ChatAction = Schemas['ChatAction'];
+export type ChatAction =
+  | 'review_first'
+  | 'run_analysis'
+  | 'create_evaluation'
+  | 'change_details'
+  | (string & {});
 export type ChatCollectedDetails = Schemas['ChatCollectedDetails'];
+export type ChatDocumentSlot = Schemas['ChatDocumentSlot'];

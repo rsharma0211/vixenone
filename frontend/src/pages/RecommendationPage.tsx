@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
-import { useParams, Link, useOutletContext } from 'react-router-dom';
+import { useParams, Link, useOutletContext, useLocation, useNavigate } from 'react-router-dom';
 import {
   Printer,
   AlertTriangle,
@@ -36,6 +36,8 @@ import type {
 export const RecommendationPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const { evaluationDetail, refresh } = useOutletContext<EvaluationLayoutContext>();
+  const location = useLocation();
+  const navigate = useNavigate();
 
   const [results, setResults] = useState<EvaluationResultsResponse | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
@@ -107,6 +109,21 @@ export const RecommendationPage: React.FC = () => {
 
   // Guard in-app and browser navigation while weights are unsaved
   useUnsavedChangesGuard(isDirty);
+
+  // Handle print query param from external navigation (e.g. Chat)
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    if (params.get('print') === 'true' && !loading && results) {
+      const btn = document.getElementById('print-report-button') as HTMLButtonElement | null;
+      if (btn) {
+        btn.focus();
+        if (!isDirty) {
+          window.print();
+        }
+      }
+      navigate(location.pathname, { replace: true });
+    }
+  }, [location.search, location.pathname, loading, results, isDirty, navigate]);
 
   // Calculate running total of entered weights
   const totalWeight = useMemo(() => {
@@ -286,6 +303,7 @@ export const RecommendationPage: React.FC = () => {
             <TooltipTrigger asChild>
               <span>
                 <Button
+                  id="print-report-button"
                   type="button"
                   variant="outline"
                   size="sm"

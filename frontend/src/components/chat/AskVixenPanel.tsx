@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { X, Send, Upload, Loader2 } from 'lucide-react';
+import { X, Send, Upload, Loader2, Check } from 'lucide-react';
 import { apiClient } from '@/lib/api/client';
 import { notifyEvaluationChanged } from '@/lib/events';
 import { cn } from '@/lib/utils';
@@ -12,6 +12,7 @@ import type {
   ChatSummary,
   ChatAction,
   ChatCollectedDetails,
+  ChatDocumentSlot,
 } from '@/lib/types';
 
 interface ChatMessage {
@@ -22,12 +23,27 @@ interface ChatMessage {
   job?: ChatJobInfo | null;
   summary?: ChatSummary | null;
   state?: string;
+  isProgress?: boolean;
 }
 
 interface AskVixenPanelProps {
   isOpen: boolean;
   onClose: () => void;
 }
+
+const parseConfirmCardDetails = (text: string, collected?: ChatCollectedDetails | null) => {
+  const titleMatch = text.match(/•\s*Title:\s*(.+)/i);
+  const catMatch = text.match(/•\s*Category:\s*(.+)/i);
+  const locMatch = text.match(/•\s*Location:\s*(.+)/i);
+  const venMatch = text.match(/•\s*Vendors:\s*(.+)/i);
+
+  return {
+    title: titleMatch ? titleMatch[1].trim() : (collected?.title || '—'),
+    category: catMatch ? catMatch[1].trim() : (collected?.category || '—'),
+    location: locMatch ? locMatch[1].trim() : 'None',
+    vendors: venMatch ? venMatch[1].trim() : (collected?.vendor_names?.join(', ') || '—'),
+  };
+};
 
 export const AskVixenPanel: React.FC<AskVixenPanelProps> = ({ isOpen, onClose }) => {
   const location = useLocation();
@@ -42,6 +58,8 @@ export const AskVixenPanel: React.FC<AskVixenPanelProps> = ({ isOpen, onClose })
   const [loading, setLoading] = useState<boolean>(false);
   const [uploading, setUploading] = useState<boolean>(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [slotErrors, setSlotErrors] = useState<Record<string, string>>({});
+  const [uploadingSlotKey, setUploadingSlotKey] = useState<string | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
@@ -92,18 +110,101 @@ export const AskVixenPanel: React.FC<AskVixenPanelProps> = ({ isOpen, onClose })
         setCollectedDetails(res.collected);
       }
 
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: Math.random().toString(36).substring(2, 9),
-          sender: 'assistant',
-          text: res.reply,
-          expect: res.expect ?? null,
-          job: res.job ?? null,
-          summary: res.summary ?? null,
-          state: res.state,
-        },
-      ]);
+      setMessages((prev) => {
+        const lastIndex = prev.length - 1;
+        const lastMsg = lastIndex >= 0 ? prev[lastIndex] : null;
+        const lastWasProgress = lastMsg?.sender === 'assistant' && lastMsg?.isProgress;
+
+        const isRunning = Boolean(
+          (res.job &&
+            ['queued', 'extracting', 'analysing', 'running', 'started'].includes(
+              res.job.status.toLowerCase()
+            )) ||
+            ((res.state === 'extracting' || res.state === 'analysing') &&
+              res.job?.status !== 'done' &&
+              res.job?.status !== 'failed')
+        );
+
+        const displayStepLabel = res.job?.step_label || res.reply;
+
+        if (lastWasProgress) {
+          if (isRunning) {
+            // Update in place with the latest step label
+            const updated = [...prev];
+            updated[lastIndex] = {
+              ...lastMsg,
+              text: displayStepLabel,
+              job: res.job ?? null,
+              state: res.state,
+              expect: res.expect ?? null,
+              summary: res.summary ?? null,
+              isProgress: true,
+            };
+            return updated;
+          } else {
+            // Job ended: REPLACE the progress message with the result reply
+            const updated = [...prev];
+            updated[lastIndex] = {
+              id: lastMsg.id,
+              sender: 'assistant',
+              text: res.reply,
+              job: res.job ?? null,
+              state: res.state,
+              expect: res.expect ?? null,
+              summary: res.summary ?? null,
+              isProgress: false,
+            };
+            return updated;
+          }
+        }
+
+        if (isRunning) {
+          return [
+            ...prev,
+            {
+              id: Math.random().toString(36).substring(2, 9),
+              sender: 'assistant',
+              text: displayStepLabel,
+              job: res.job ?? null,
+              state: res.state,
+              expect: res.expect ?? null,
+              summary: res.summary ?? null,
+              isProgress: true,
+            },
+          ];
+        }
+
+        // If last was upload_files and this is also upload_files:
+        const lastWasUploadFiles =
+          lastMsg?.sender === 'assistant' && lastMsg?.state === 'upload_files';
+        if (lastWasUploadFiles && res.state === 'upload_files') {
+          const updated = [...prev];
+          updated[lastIndex] = {
+            ...lastMsg,
+            text: res.reply,
+            job: res.job ?? null,
+            state: res.state,
+            expect: res.expect ?? null,
+            summary: res.summary ?? null,
+            isProgress: false,
+          };
+          return updated;
+        }
+
+        return [
+          ...prev,
+          {
+            id: Math.random().toString(36).substring(2, 9),
+            sender: 'assistant',
+            text: res.reply,
+            expect: res.expect ?? null,
+            job: res.job ?? null,
+            summary: res.summary ?? null,
+            state: res.state,
+            isProgress: false,
+          },
+        ];
+      });
     },
     []
   );
@@ -114,6 +215,7 @@ export const AskVixenPanel: React.FC<AskVixenPanelProps> = ({ isOpen, onClose })
       message?: string | null;
       action?: ChatAction | null;
       collected?: ChatCollectedDetails | null;
+      value?: string | null;
     }) => {
       try {
         setLoading(true);
@@ -122,6 +224,7 @@ export const AskVixenPanel: React.FC<AskVixenPanelProps> = ({ isOpen, onClose })
           message: payload.message ?? null,
           action: payload.action ?? null,
           collected: payload.collected ?? collectedDetails,
+          value: payload.value ?? null,
         });
         applyTurnResponse(res);
       } catch (err: unknown) {
@@ -150,7 +253,6 @@ export const AskVixenPanel: React.FC<AskVixenPanelProps> = ({ isOpen, onClose })
     const routeEvalId = match && match[1] !== 'new' ? match[1] : null;
 
     if (routeEvalId) {
-      // Opened on an evaluation page: attach to that evaluation and resume
       if (currentEvaluationId !== routeEvalId) {
         setCurrentEvaluationId(routeEvalId);
         setCollectedDetails(null);
@@ -158,7 +260,6 @@ export const AskVixenPanel: React.FC<AskVixenPanelProps> = ({ isOpen, onClose })
         sendTurn({ evaluation_id: routeEvalId });
       }
     } else {
-      // Opened elsewhere (e.g. list, settings): new evaluation in memory
       if (currentEvaluationId !== null || messages.length === 0) {
         setCurrentEvaluationId(null);
         setCollectedDetails(null);
@@ -166,7 +267,7 @@ export const AskVixenPanel: React.FC<AskVixenPanelProps> = ({ isOpen, onClose })
         sendTurn({ evaluation_id: null });
       }
     }
-  }, [isOpen]); // Intentionally on isOpen change
+  }, [isOpen]);
 
   // Polling every 2 s while a job runs and panel is open
   useEffect(() => {
@@ -179,22 +280,14 @@ export const AskVixenPanel: React.FC<AskVixenPanelProps> = ({ isOpen, onClose })
         const res = await apiClient.chatTurn({
           evaluation_id: currentEvaluationId,
         });
-        // Replace or append if status changed
-        if (
-          res.job?.status !== latestJob?.status ||
-          res.job?.step_label !== latestJob?.step_label ||
-          res.state !== latestState ||
-          res.summary
-        ) {
-          applyTurnResponse(res);
-        }
+        applyTurnResponse(res);
       } catch {
         // Silently ignore background polling errors
       }
     }, 2000);
 
     return () => clearInterval(interval);
-  }, [isOpen, currentEvaluationId, isJobRunning, latestJob?.status, latestJob?.step_label, latestState, applyTurnResponse]);
+  }, [isOpen, currentEvaluationId, isJobRunning, applyTurnResponse]);
 
   const handleStartNew = () => {
     setCurrentEvaluationId(null);
@@ -202,6 +295,7 @@ export const AskVixenPanel: React.FC<AskVixenPanelProps> = ({ isOpen, onClose })
     setMessages([]);
     setInputText('');
     setUploadError(null);
+    setSlotErrors({});
     sendTurn({ evaluation_id: null });
   };
 
@@ -222,8 +316,20 @@ export const AskVixenPanel: React.FC<AskVixenPanelProps> = ({ isOpen, onClose })
     await sendTurn({ message: text });
   };
 
-  const handleChoiceClick = async (action: string, label: string) => {
+  const handleChoiceClick = async (action: string, label: string, value?: string | null) => {
     if (loading || uploading) return;
+
+    if (action === 'review_first') {
+      if (currentEvaluationId) {
+        navigate(`/evaluations/${currentEvaluationId}/requirements`);
+      }
+      // Send turn so chat stays open and keeps "Run analysis now" available
+      await sendTurn({
+        action: action as ChatAction,
+        value: value ?? null,
+      });
+      return;
+    }
 
     setMessages((prev) => [
       ...prev,
@@ -236,7 +342,36 @@ export const AskVixenPanel: React.FC<AskVixenPanelProps> = ({ isOpen, onClose })
 
     await sendTurn({
       action: action as ChatAction,
+      value: value ?? null,
     });
+  };
+
+  const handleSlotFileUpload = async (slot: ChatDocumentSlot, file: File) => {
+    if (!currentEvaluationId) return;
+    const slotKey = `${slot.kind}_${slot.vendor_id || ''}`;
+    setSlotErrors((prev) => {
+      const next = { ...prev };
+      delete next[slotKey];
+      return next;
+    });
+    setUploadingSlotKey(slotKey);
+
+    try {
+      await apiClient.uploadDocument(
+        currentEvaluationId,
+        file,
+        slot.kind,
+        slot.vendor_id ?? undefined
+      );
+
+      notifyEvaluationChanged(currentEvaluationId);
+      await sendTurn({ evaluation_id: currentEvaluationId });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Upload failed';
+      setSlotErrors((prev) => ({ ...prev, [slotKey]: msg }));
+    } finally {
+      setUploadingSlotKey(null);
+    }
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -254,7 +389,6 @@ export const AskVixenPanel: React.FC<AskVixenPanelProps> = ({ isOpen, onClose })
         latestExpect.vendor_id
       );
 
-      // Refresh background tabs/lists
       notifyEvaluationChanged(currentEvaluationId);
 
       setMessages((prev) => [
@@ -266,12 +400,10 @@ export const AskVixenPanel: React.FC<AskVixenPanelProps> = ({ isOpen, onClose })
         },
       ]);
 
-      // Reset file input
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
 
-      // Send a turn so chat moves on
       await sendTurn({ evaluation_id: currentEvaluationId });
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Upload failed';
@@ -281,9 +413,13 @@ export const AskVixenPanel: React.FC<AskVixenPanelProps> = ({ isOpen, onClose })
     }
   };
 
-  const handleNavigate = (tab: 'comparison' | 'recommendation') => {
+  const handleNavigate = (tab: 'comparison' | 'recommendation' | 'print') => {
     if (currentEvaluationId) {
-      navigate(`/evaluations/${currentEvaluationId}/${tab}`);
+      if (tab === 'print') {
+        navigate(`/evaluations/${currentEvaluationId}/recommendation?print=true`);
+      } else {
+        navigate(`/evaluations/${currentEvaluationId}/${tab}`);
+      }
     }
   };
 
@@ -308,7 +444,7 @@ export const AskVixenPanel: React.FC<AskVixenPanelProps> = ({ isOpen, onClose })
       )}
     >
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-surface shrink-0">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-accent-tint shrink-0">
         <div className="flex items-center gap-2">
           <img src="/fox.png" alt="" className="h-6 w-6 object-contain pointer-events-none" />
           <span className="font-semibold text-text text-sm sm:text-base">Ask Vixen</span>
@@ -335,50 +471,182 @@ export const AskVixenPanel: React.FC<AskVixenPanelProps> = ({ isOpen, onClose })
 
       {/* Message List */}
       <div className="flex-1 overflow-y-auto overflow-x-hidden p-4 space-y-3.5 bg-background">
-        {messages.map((msg) => (
-          <div
-            key={msg.id}
-            className={cn(
-              'flex flex-col',
-              msg.sender === 'user' ? 'items-end' : 'items-start'
-            )}
-          >
+        {messages.map((msg, index) => {
+          const isLatest = index === messages.length - 1;
+
+          return (
             <div
+              key={msg.id}
               className={cn(
-                'text-xs sm:text-sm px-3.5 py-2.5 rounded-2xl break-words',
-                msg.sender === 'user'
-                  ? 'bg-navy text-white rounded-br-xs max-w-[85%]'
-                  : 'bg-surface text-text border border-border rounded-bl-xs max-w-[95%] space-y-2'
+                'flex flex-col',
+                msg.sender === 'user' ? 'items-end' : 'items-start'
               )}
             >
-              <div className="whitespace-pre-wrap">{msg.text}</div>
+              <div
+                className={cn(
+                  'text-xs sm:text-sm px-3.5 py-2.5 rounded-2xl break-words',
+                  msg.sender === 'user'
+                    ? 'bg-orange text-navy rounded-br-xs max-w-[85%]'
+                    : 'bg-surface text-text border border-border rounded-bl-xs max-w-[95%] space-y-2.5'
+                )}
+              >
+                {msg.isProgress ? (
+                  <div className="flex items-center gap-2 text-xs text-navy font-medium">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin text-navy shrink-0" />
+                    <span>{msg.text}</span>
+                  </div>
+                ) : (
+                  <>
+                    {msg.state === 'confirm_details' ? (
+                      <div className="space-y-2.5">
+                        <p className="text-xs text-text font-medium">
+                          Please confirm the evaluation details:
+                        </p>
+                        <div className="rounded-lg border border-border bg-background p-3 space-y-2">
+                          {(() => {
+                            const details = parseConfirmCardDetails(msg.text, collectedDetails);
+                            return (
+                              <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
+                                <dt className="text-muted font-medium">Title:</dt>
+                                <dd className="text-text font-medium">{details.title}</dd>
 
-              {/* Summary table if present */}
-              {msg.summary && (
-                <ChatSummaryTable
-                  summary={msg.summary}
-                  onNavigate={handleNavigate}
-                />
-              )}
+                                <dt className="text-muted font-medium">Category:</dt>
+                                <dd className="text-text">{details.category}</dd>
+
+                                <dt className="text-muted font-medium">Location:</dt>
+                                <dd className="text-text">{details.location}</dd>
+
+                                <dt className="text-muted font-medium">Vendors:</dt>
+                                <dd className="text-text">{details.vendors}</dd>
+                              </dl>
+                            );
+                          })()}
+
+                          {msg.expect?.kind === 'choice' && msg.expect.options && (
+                            <div className="flex flex-wrap gap-1.5 pt-2 border-t border-border">
+                              {msg.expect.options.map((opt, i) => (
+                                <button
+                                  key={i}
+                                  type="button"
+                                  disabled={loading || uploading || !isLatest}
+                                  onClick={() => handleChoiceClick(opt.action, opt.label, opt.value)}
+                                  className="text-xs font-medium px-3 py-1.5 rounded-md border border-orange text-navy hover:bg-orange hover:text-navy active:bg-orange active:text-navy transition-colors disabled:opacity-50 cursor-pointer"
+                                >
+                                  {opt.label}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="whitespace-pre-wrap">{msg.text}</div>
+                    )}
+
+                    {/* Files Card for expect kind 'files' */}
+                    {msg.expect?.kind === 'files' && msg.expect.files && (
+                      <div className="rounded-lg border border-border bg-background p-3 space-y-2">
+                        <div className="text-xs font-semibold text-text border-b border-border pb-1 flex items-center justify-between">
+                          <span>Required Documents</span>
+                          <span className="text-[11px] font-normal text-muted">PDF or DOCX</span>
+                        </div>
+                        <div className="divide-y divide-border">
+                          {msg.expect.files.map((slot, idx) => {
+                            const slotKey = `${slot.kind}_${slot.vendor_id || ''}`;
+                            const isUploadingThis = uploadingSlotKey === slotKey;
+                            const slotError = slotErrors[slotKey];
+                            const slotLabel =
+                              slot.kind === 'requirements'
+                                ? 'Requirements document'
+                                : `Proposal — ${slot.vendor_name || 'Vendor'}`;
+
+                            return (
+                              <div key={idx} className="py-2 first:pt-1 last:pb-0 flex flex-col gap-1">
+                                <div className="flex items-center justify-between gap-2 text-xs">
+                                  <span className="font-medium text-text">{slotLabel}</span>
+                                  {slot.uploaded ? (
+                                    <div className="flex items-center gap-1.5 text-status-compliant-text font-medium text-xs">
+                                      <Check className="h-4 w-4 shrink-0" />
+                                      <span
+                                        className="text-muted truncate max-w-[150px]"
+                                        title={slot.filename || undefined}
+                                      >
+                                        {slot.filename || 'Uploaded'}
+                                      </span>
+                                    </div>
+                                  ) : (
+                                    <div>
+                                      <input
+                                        type="file"
+                                        id={`slot-file-input-${idx}`}
+                                        accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                                        className="hidden"
+                                        onChange={(e) => {
+                                          const file = e.target.files?.[0];
+                                          if (file) {
+                                            handleSlotFileUpload(slot, file);
+                                          }
+                                          e.target.value = '';
+                                        }}
+                                        disabled={loading || uploading || isJobRunning}
+                                      />
+                                      <button
+                                        type="button"
+                                        disabled={
+                                          loading ||
+                                          uploading ||
+                                          isJobRunning ||
+                                          Boolean(uploadingSlotKey) ||
+                                          !isLatest
+                                        }
+                                        onClick={() =>
+                                          document.getElementById(`slot-file-input-${idx}`)?.click()
+                                        }
+                                        className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-md border border-orange text-navy hover:bg-orange hover:text-navy active:bg-orange active:text-navy transition-colors disabled:opacity-50 cursor-pointer"
+                                      >
+                                        {isUploadingThis ? (
+                                          <>
+                                            <Loader2 className="h-3.5 w-3.5 animate-spin text-navy" />
+                                            <span>Uploading...</span>
+                                          </>
+                                        ) : (
+                                          <>
+                                            <Upload className="h-3.5 w-3.5 text-navy" />
+                                            <span>Upload</span>
+                                          </>
+                                        )}
+                                      </button>
+                                    </div>
+                                  )}
+                                </div>
+                                {slotError && (
+                                  <p className="text-xs text-status-noncompliant-text mt-0.5">
+                                    {slotError}
+                                  </p>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Summary table if present */}
+                    {msg.summary && (
+                      <ChatSummaryTable
+                        summary={msg.summary}
+                        onNavigate={handleNavigate}
+                      />
+                    )}
+                  </>
+                )}
+              </div>
             </div>
-          </div>
-        ))}
-
-        {/* Polling / Job progress banner */}
-        {isJobRunning && (
-          <div className="flex items-center gap-2 p-2.5 rounded-lg bg-navy/5 border border-navy/15 text-xs text-navy font-medium">
-            <Loader2 className="h-3.5 w-3.5 animate-spin shrink-0 text-navy" />
-            <span>
-              {latestJob?.step_label ||
-                (latestState === 'extracting'
-                  ? 'Extracting requirements...'
-                  : 'Analyzing proposals...')}
-            </span>
-          </div>
-        )}
+          );
+        })}
 
         {/* Loading indicator */}
-        {loading && (
+        {loading && !isJobRunning && (
           <div className="flex items-center gap-2 text-xs text-muted">
             <Loader2 className="h-3.5 w-3.5 animate-spin text-navy" />
             <span>Vixen is thinking...</span>
@@ -390,7 +658,7 @@ export const AskVixenPanel: React.FC<AskVixenPanelProps> = ({ isOpen, onClose })
 
       {/* Expect Controls & Input area */}
       <div className="p-3 border-t border-border bg-surface shrink-0 space-y-2">
-        {/* File upload expect */}
+        {/* Single file upload fallback if kind is 'file' */}
         {latestExpect?.kind === 'file' && (
           <div className="p-2.5 rounded-lg border border-border bg-background space-y-2">
             <input
@@ -404,16 +672,16 @@ export const AskVixenPanel: React.FC<AskVixenPanelProps> = ({ isOpen, onClose })
               type="button"
               disabled={uploading || loading}
               onClick={() => fileInputRef.current?.click()}
-              className="w-full flex items-center justify-center gap-2 px-3 py-2 text-xs font-medium rounded-md bg-navy text-white hover:bg-navy/90 transition-colors disabled:opacity-50 cursor-pointer"
+              className="w-full flex items-center justify-center gap-2 px-3 py-2 text-xs font-medium rounded-md border border-orange text-navy hover:bg-orange hover:text-navy active:bg-orange active:text-navy transition-colors disabled:opacity-50 cursor-pointer"
             >
               {uploading ? (
                 <>
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  <Loader2 className="h-3.5 w-3.5 animate-spin text-navy" />
                   <span>Uploading {fileSlotLabel}...</span>
                 </>
               ) : (
                 <>
-                  <Upload className="h-3.5 w-3.5" />
+                  <Upload className="h-3.5 w-3.5 text-navy" />
                   <span>{fileUploadLabel}</span>
                 </>
               )}
@@ -424,22 +692,24 @@ export const AskVixenPanel: React.FC<AskVixenPanelProps> = ({ isOpen, onClose })
           </div>
         )}
 
-        {/* Choice expect */}
-        {latestExpect?.kind === 'choice' && latestExpect.options && (
-          <div className="flex flex-wrap gap-1.5 pb-1">
-            {latestExpect.options.map((opt, i) => (
-              <button
-                key={i}
-                type="button"
-                disabled={loading || uploading}
-                onClick={() => handleChoiceClick(opt.action, opt.label)}
-                className="text-xs font-medium px-3 py-1.5 rounded-md border border-navy/40 bg-navy/5 text-navy hover:bg-navy hover:text-white transition-colors disabled:opacity-50 cursor-pointer"
-              >
-                {opt.label}
-              </button>
-            ))}
-          </div>
-        )}
+        {/* Choice expect (choices other than confirm_details, which renders inside its card) */}
+        {latestExpect?.kind === 'choice' &&
+          latestExpect.options &&
+          latestState !== 'confirm_details' && (
+            <div className="flex flex-wrap gap-1.5 pb-1">
+              {latestExpect.options.map((opt, i) => (
+                <button
+                  key={i}
+                  type="button"
+                  disabled={loading || uploading}
+                  onClick={() => handleChoiceClick(opt.action, opt.label, opt.value)}
+                  className="text-xs font-medium px-3 py-1.5 rounded-md border border-orange text-navy hover:bg-orange hover:text-navy active:bg-orange active:text-navy transition-colors disabled:opacity-50 cursor-pointer"
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          )}
 
         {/* Text Input area (always available for conversation) */}
         <div className="flex items-center gap-2">
@@ -462,9 +732,9 @@ export const AskVixenPanel: React.FC<AskVixenPanelProps> = ({ isOpen, onClose })
             onClick={handleSendMessage}
             disabled={!inputText.trim() || loading || uploading}
             aria-label="Send message"
-            className="h-9 px-3 flex items-center justify-center rounded-md bg-navy text-white hover:bg-navy/90 disabled:opacity-40 transition-colors cursor-pointer"
+            className="h-9 px-3 flex items-center justify-center rounded-md bg-orange text-navy hover:bg-orange/90 disabled:opacity-40 transition-colors cursor-pointer"
           >
-            <Send className="h-3.5 w-3.5" />
+            <Send className="h-3.5 w-3.5 text-navy" />
           </button>
         </div>
       </div>

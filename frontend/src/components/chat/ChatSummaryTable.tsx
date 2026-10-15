@@ -4,7 +4,7 @@ import type { ChatSummary } from '@/lib/types';
 
 interface ChatSummaryTableProps {
   summary: ChatSummary;
-  onNavigate: (tab: 'comparison' | 'recommendation') => void;
+  onNavigate: (tab: 'comparison' | 'recommendation' | 'print') => void;
 }
 
 export const ChatSummaryTable: React.FC<ChatSummaryTableProps> = ({
@@ -78,16 +78,23 @@ export const ChatSummaryTable: React.FC<ChatSummaryTableProps> = ({
         <button
           type="button"
           onClick={() => onNavigate('comparison')}
-          className="text-xs px-3 py-1.5 rounded-md bg-navy text-white hover:bg-navy/90 font-medium transition-colors focus:outline-none focus:ring-1 focus:ring-navy cursor-pointer"
+          className="text-xs px-3 py-1.5 rounded-md border border-orange text-navy hover:bg-orange hover:text-navy active:bg-orange active:text-navy font-medium transition-colors focus:outline-none focus:ring-1 focus:ring-orange cursor-pointer"
         >
           Open comparison
         </button>
         <button
           type="button"
           onClick={() => onNavigate('recommendation')}
-          className="text-xs px-3 py-1.5 rounded-md border border-navy text-navy hover:bg-navy/5 font-medium transition-colors focus:outline-none focus:ring-1 focus:ring-navy cursor-pointer"
+          className="text-xs px-3 py-1.5 rounded-md border border-orange text-navy hover:bg-orange hover:text-navy active:bg-orange active:text-navy font-medium transition-colors focus:outline-none focus:ring-1 focus:ring-orange cursor-pointer"
         >
           Open recommendation
+        </button>
+        <button
+          type="button"
+          onClick={() => onNavigate('print')}
+          className="text-xs px-3 py-1.5 rounded-md border border-orange text-navy hover:bg-orange hover:text-navy active:bg-orange active:text-navy font-medium transition-colors focus:outline-none focus:ring-1 focus:ring-orange cursor-pointer"
+        >
+          Print report
         </button>
       </div>
     </div>
