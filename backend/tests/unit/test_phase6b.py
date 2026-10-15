@@ -7,6 +7,7 @@ import pdfplumber
 import pytest
 from sqlalchemy import delete, func, select
 
+from app.core.config import settings
 from app.core.database import async_session
 from app.llm.client import (
     ExtractedCost,
@@ -278,7 +279,7 @@ async def test_extraction_job_on_seeded_evaluation_completes(tmp_path):
         await session.commit()
         job_id = job.id
 
-    fake_client = _build_content_based_fake_gemini(Path("/app/dataset"))
+    fake_client = _build_content_based_fake_gemini(settings.dataset_path)
 
     # Run extraction job
     await run_job_by_id(
@@ -324,7 +325,7 @@ async def test_analysis_job_on_seeded_evaluation_completes(tmp_path):
         await session.commit()
         job_id = job.id
 
-    fake_client = _build_content_based_fake_gemini(Path("/app/dataset"))
+    fake_client = _build_content_based_fake_gemini(settings.dataset_path)
 
     # Run analysis job
     await run_job_by_id(
@@ -379,7 +380,7 @@ async def test_missing_file_error_equals_exact_friendly_text(tmp_path):
         job_id = job.id
         target_doc_id = target_doc.id
 
-    fake_client = _build_content_based_fake_gemini(Path("/app/dataset"))
+    fake_client = _build_content_based_fake_gemini(settings.dataset_path)
 
     # Run extraction job
     await run_job_by_id(
@@ -440,7 +441,7 @@ async def test_storage_read_failure_error_equals_exact_friendly_text(tmp_path):
             raise OSError("Hardware drive error at /dev/sda1")
 
     failing_storage = FailingStorage(base_dir=str(tmp_path / "uploads"))
-    fake_client = _build_content_based_fake_gemini(Path("/app/dataset"))
+    fake_client = _build_content_based_fake_gemini(settings.dataset_path)
 
     await run_job_by_id(
         job_id=job_id,

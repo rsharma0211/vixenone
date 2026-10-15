@@ -37,7 +37,6 @@ def _fake_token(uid: str, email: str = "extract_user@vixenone.app") -> dict:
 def _find_dataset_dir() -> Path:
     candidates = [
         Path("/app/dataset"),
-        Path(__file__).resolve().parents[3] / "dataset",
         Path(__file__).resolve().parents[2] / "dataset",
     ]
     for c in candidates:

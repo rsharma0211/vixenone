@@ -33,12 +33,6 @@ class Settings(BaseSettings):
         configured = Path(self.DATASET_DIR)
         if configured.is_dir():
             return configured
-        root_dataset = Path("dataset")
-        if root_dataset.is_dir():
-            return root_dataset.resolve()
-        repo_dataset = Path(__file__).resolve().parents[3] / "dataset"
-        if repo_dataset.is_dir():
-            return repo_dataset
         backend_dataset = Path(__file__).resolve().parents[2] / "dataset"
         if backend_dataset.is_dir():
             return backend_dataset

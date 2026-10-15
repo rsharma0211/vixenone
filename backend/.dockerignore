@@ -1,0 +1,37 @@
+# Tests
+tests/
+tests
+
+# Python caches
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Test & coverage caches
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Lint & type-check caches
+.ruff_cache/
+.mypy_cache/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Environment files (no env files in production image)
+.env*
+*.env
+
+# Local uploads
+uploads/
+
+# Git metadata
+.git/
+.gitignore
+.gitattributes
+
+# Test pack dataset must be included
+!dataset

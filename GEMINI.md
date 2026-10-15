@@ -118,13 +118,13 @@ Do not add dependencies without recording the reason in `docs/context/decisions.
 │   │   ├── llm/              # the ONLY place that calls Gemini
 │   │   │   └── prompts/      # versioned prompt files
 │   │   └── repositories/     # SQLAlchemy sessions & queries only (scoped by user uid)
-│   └── tests/
-│       ├── unit/
-│       └── fixtures/llm/     # recorded Gemini responses
-├── dataset/
-│   ├── requirements/
-│   ├── proposals/
-│   └── expected/             # ground truth — READ ONLY for agents
+│   ├── tests/
+│   │   ├── unit/
+│   │   └── fixtures/llm/     # recorded Gemini responses
+│   └── dataset/              # test-pack files
+│       ├── requirements/
+│       ├── proposals/
+│       └── expected/         # ground truth — READ ONLY for agents
 ├── eval/                     # eval harness vs ground truth
 ├── uploads/                  # local file storage (gitignored)
 └── docs/
@@ -146,7 +146,7 @@ Keep this layout. If a new top-level folder is needed, record why in `decisions.
 | `make up` | Start full local stack (`web`, `api`, `postgres`, `firebase-auth-emulator`) |
 | `make down` | Stop local stack |
 | `make test` | Run backend unit tests (no live model calls) |
-| `make eval` | Run pipeline on `dataset/` with live Gemini; compare to `dataset/expected/` |
+| `make eval` | Run pipeline on `backend/dataset/` with live Gemini; compare to `backend/dataset/expected/` |
 | `make types` | Regenerate frontend types from backend OpenAPI |
 | `make lint` | Lint backend and frontend |
 | `make seed` | Create demo user in Auth emulator |
@@ -236,7 +236,7 @@ Every task ends with `make test` passing. Tasks touching schemas also run `make 
 ## 8. Forbidden
 
 - Deleting files or folders unless the task explicitly says so.
-- Editing anything in `dataset/expected/`.
+- Editing anything in `backend/dataset/expected/`.
 - Hand-editing `frontend/src/lib/types/`.
 - Changing a schema without running `make types` and updating every call site and test mock.
 - Calling Gemini outside `app/llm/`.

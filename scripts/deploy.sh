@@ -108,7 +108,7 @@ step_build_api() {
 
   # Refuse if git working tree has uncommitted changes (tracked or untracked in codebase)
   cd "${REPO_ROOT}"
-  UNCOMMITTED=$(git status --porcelain | grep -v '^[?]\{2\} dataset/' || true)
+  UNCOMMITTED=$(git status --porcelain | grep -v '^[?]\{2\} backend/dataset/' || true)
   if [ -n "$UNCOMMITTED" ]; then
     if [ "$DRY_RUN" = "1" ]; then
       echo "[dry-run] Git working tree check: uncommitted changes detected (real deploy will refuse)."

@@ -854,7 +854,6 @@ def test_live_gemini_smoke_full_pipeline():
     dataset_dir = None
     candidates = [
         Path("/app/dataset"),
-        Path(__file__).resolve().parents[3] / "dataset",
         Path(__file__).resolve().parents[2] / "dataset",
     ]
     for c in candidates:
