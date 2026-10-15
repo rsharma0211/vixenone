@@ -53,6 +53,7 @@ export const AskVixenPanel: React.FC<AskVixenPanelProps> = ({ isOpen, onClose })
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [currentEvaluationId, setCurrentEvaluationId] = useState<string | null>(null);
   const [collectedDetails, setCollectedDetails] = useState<ChatCollectedDetails | null>(null);
+  const [isDetached, setIsDetached] = useState<boolean>(false);
 
   const [inputText, setInputText] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(false);
@@ -63,6 +64,7 @@ export const AskVixenPanel: React.FC<AskVixenPanelProps> = ({ isOpen, onClose })
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
+  const lastAttachedPathRef = useRef<string | null>(null);
 
   const latestMessage = messages[messages.length - 1];
   const latestExpect = latestMessage?.sender === 'assistant' ? latestMessage.expect : null;
@@ -104,6 +106,7 @@ export const AskVixenPanel: React.FC<AskVixenPanelProps> = ({ isOpen, onClose })
     (res: ChatTurnResponse) => {
       if (res.evaluation_id) {
         setCurrentEvaluationId(res.evaluation_id);
+        setIsDetached(false);
         notifyEvaluationChanged(res.evaluation_id);
       }
       if (res.collected) {
@@ -219,12 +222,20 @@ export const AskVixenPanel: React.FC<AskVixenPanelProps> = ({ isOpen, onClose })
     }) => {
       try {
         setLoading(true);
+        const evalId =
+          payload.evaluation_id !== undefined
+            ? payload.evaluation_id
+            : (isDetached ? null : currentEvaluationId);
+        const coll =
+          payload.collected !== undefined
+            ? payload.collected
+            : (payload.evaluation_id === null ? null : collectedDetails);
         const res = await apiClient.chatTurn({
-          evaluation_id: payload.evaluation_id ?? currentEvaluationId,
+          evaluation_id: evalId,
           message: payload.message ?? null,
           action: payload.action ?? null,
-          collected: payload.collected ?? collectedDetails,
-          value: payload.value ?? null,
+          collected: coll,
+          value: payload.value !== undefined ? payload.value : null,
         });
         applyTurnResponse(res);
       } catch (err: unknown) {
@@ -242,15 +253,25 @@ export const AskVixenPanel: React.FC<AskVixenPanelProps> = ({ isOpen, onClose })
         setLoading(false);
       }
     },
-    [currentEvaluationId, collectedDetails, applyTurnResponse]
+    [currentEvaluationId, collectedDetails, isDetached, applyTurnResponse]
   );
 
   // Initialize or attach context when opened
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen) {
+      setIsDetached(false);
+      return;
+    }
 
     const match = location.pathname.match(/\/evaluations\/([^/]+)/);
     const routeEvalId = match && match[1] !== 'new' ? match[1] : null;
+
+    if (lastAttachedPathRef.current && lastAttachedPathRef.current !== location.pathname) {
+      setIsDetached(false);
+    }
+    lastAttachedPathRef.current = location.pathname;
+
+    if (isDetached) return;
 
     if (routeEvalId) {
       if (currentEvaluationId !== routeEvalId) {
@@ -267,7 +288,7 @@ export const AskVixenPanel: React.FC<AskVixenPanelProps> = ({ isOpen, onClose })
         sendTurn({ evaluation_id: null });
       }
     }
-  }, [isOpen]);
+  }, [isOpen, location.pathname, isDetached, currentEvaluationId, messages.length, sendTurn]);
 
   // Polling every 2 s while a job runs and panel is open
   useEffect(() => {
@@ -290,13 +311,16 @@ export const AskVixenPanel: React.FC<AskVixenPanelProps> = ({ isOpen, onClose })
   }, [isOpen, currentEvaluationId, isJobRunning, applyTurnResponse]);
 
   const handleStartNew = () => {
+    setIsDetached(true);
     setCurrentEvaluationId(null);
     setCollectedDetails(null);
     setMessages([]);
     setInputText('');
     setUploadError(null);
     setSlotErrors({});
-    sendTurn({ evaluation_id: null });
+    setUploadingSlotKey(null);
+    setUploading(false);
+    sendTurn({ evaluation_id: null, collected: null });
   };
 
   const handleSendMessage = async () => {
@@ -326,7 +350,7 @@ export const AskVixenPanel: React.FC<AskVixenPanelProps> = ({ isOpen, onClose })
       // Send turn so chat stays open and keeps "Run analysis now" available
       await sendTurn({
         action: action as ChatAction,
-        value: value ?? null,
+        value: value !== undefined ? value : null,
       });
       return;
     }
@@ -342,7 +366,7 @@ export const AskVixenPanel: React.FC<AskVixenPanelProps> = ({ isOpen, onClose })
 
     await sendTurn({
       action: action as ChatAction,
-      value: value ?? null,
+      value: value !== undefined ? value : null,
     });
   };
 
