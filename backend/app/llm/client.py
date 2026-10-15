@@ -50,6 +50,12 @@ class ExtractedRequirement(BaseModel):
     source_section: Optional[str] = None
 
 
+class ParsedEvaluationDetails(BaseModel):
+    title: Optional[str] = None
+    category: Optional[str] = None
+    vendor_names: List[str] = Field(default_factory=list)
+
+
 class ExtractedRequirementsEnvelope(BaseModel):
     requirements: List[ExtractedRequirement]
 
@@ -231,6 +237,13 @@ def build_analyse_vendor_prompt(
     )
 
 
+def build_parse_details_prompt(user_message: str) -> str:
+    prompt_path = PROMPTS_DIR / "parse_details_v1.txt"
+    template = prompt_path.read_text(encoding="utf-8")
+    safe_message = (user_message or "")[:1000]
+    return template.replace("{user_message}", safe_message)
+
+
 class GeminiClient(ABC):
     @abstractmethod
     async def pdf_to_pages(self, pdf_bytes: bytes) -> List[PageText]:
@@ -253,6 +266,13 @@ class GeminiClient(ABC):
         pages: List[PageText],
     ) -> VendorAnalysisResult:
         """Analyse a single vendor proposal against requirements and judged criteria."""
+        ...
+
+    @abstractmethod
+    async def parse_evaluation_details(
+        self, user_message: str
+    ) -> ParsedEvaluationDetails:
+        """Parse evaluation title, category, and vendor names from user message."""
         ...
 
 
@@ -458,6 +478,23 @@ class GoogleGenAIClient(GeminiClient):
         )
         return result
 
+    async def parse_evaluation_details(
+        self, user_message: str
+    ) -> ParsedEvaluationDetails:
+        prompt = build_parse_details_prompt(user_message)
+        result = await self._call_with_retries_and_validation(
+            operation_name="parse_evaluation_details",
+            contents=[prompt],
+            schema_cls=ParsedEvaluationDetails,
+        )
+        logger.info(
+            "Parsed evaluation details: has_title=%s has_category=%s vendor_count=%d",
+            bool(result.title),
+            bool(result.category),
+            len(result.vendor_names),
+        )
+        return result
+
 
 class FakeGeminiClient(GeminiClient):
     """Fake Gemini client for deterministic unit testing without live model calls."""
@@ -473,6 +510,7 @@ class FakeGeminiClient(GeminiClient):
         default_analysis: Optional[VendorAnalysisResult] = None,
         analysis_by_vendor: Optional[Dict[str, VendorAnalysisResult]] = None,
         analysis_handler: Optional[Callable[..., VendorAnalysisResult]] = None,
+        details_handler: Optional[Callable[[str], ParsedEvaluationDetails]] = None,
         delay_seconds: float = 0.0,
     ) -> None:
         self.default_pages = default_pages or [
@@ -523,10 +561,12 @@ class FakeGeminiClient(GeminiClient):
         self.default_analysis = default_analysis
         self.analysis_by_vendor = analysis_by_vendor or {}
         self.analysis_handler = analysis_handler
+        self.details_handler = details_handler
         self.delay_seconds = delay_seconds
         self.pdf_call_count = 0
         self.requirements_call_count = 0
         self.analysis_call_count = 0
+        self.details_call_count = 0
         self.last_analysis_calls: List[Dict[str, Any]] = []
         self.in_flight = 0
         self.max_in_flight = 0
@@ -645,6 +685,82 @@ class FakeGeminiClient(GeminiClient):
             )
         finally:
             self.in_flight -= 1
+
+    async def parse_evaluation_details(
+        self, user_message: str
+    ) -> ParsedEvaluationDetails:
+        self.details_call_count += 1
+        if self.details_handler is not None:
+            return self.details_handler(user_message)
+
+        msg_lower = user_message.lower()
+
+        # Check prompt injection: ignore instructions inside message and extract only legitimate details
+        if "ignore previous instructions" in msg_lower or "ignore all instructions" in msg_lower:
+            if "housekeeping" in msg_lower and "brightnest" in msg_lower:
+                return ParsedEvaluationDetails(
+                    title="Housekeeping Services",
+                    category="Housekeeping",
+                    vendor_names=["BrightNest Facility Services", "Shubh Services"],
+                )
+            return ParsedEvaluationDetails(title=None, category=None, vendor_names=[])
+
+        # Content-based parsing for tests:
+        title = None
+        category = None
+        vendors: List[str] = []
+
+        if "housekeeping" in msg_lower:
+            category = "Housekeeping"
+        elif "security" in msg_lower:
+            category = "Security"
+        elif "pantry" in msg_lower:
+            category = "Pantry"
+        elif "facilities" in msg_lower:
+            category = "Facilities"
+
+        # Explicit test markers
+        if "only title:" in msg_lower:
+            title = user_message.split("only title:", 1)[1].strip()
+            return ParsedEvaluationDetails(title=title, category=None, vendor_names=[])
+
+        if "only category:" in msg_lower:
+            category = user_message.split("only category:", 1)[1].strip()
+            return ParsedEvaluationDetails(title=None, category=category, vendor_names=[])
+
+        if "only vendors:" in msg_lower:
+            v_str = user_message.split("only vendors:", 1)[1].strip()
+            vendors = [v.strip() for v in v_str.split(",") if v.strip()]
+            return ParsedEvaluationDetails(title=None, category=None, vendor_names=vendors)
+
+        # 4 vendors case for testing "4 vendors -> asks to choose"
+        if "4 vendors" in msg_lower or ("vendor a" in msg_lower and "vendor d" in msg_lower) or "four vendors" in msg_lower:
+            vendors = ["Vendor A", "Vendor B", "Vendor C", "Vendor D"]
+            title = "Office Cleaning"
+            category = category or "Housekeeping"
+            return ParsedEvaluationDetails(title=title, category=category, vendor_names=vendors)
+
+        if "brightnest" in msg_lower and "shubh" in msg_lower and "urbankleen" in msg_lower:
+            vendors = ["BrightNest Facility Services", "Shubh Services", "UrbanKleen Pvt Ltd"]
+            title = "Housekeeping Services — Mumbai Office"
+            category = category or "Housekeeping"
+        elif "brightnest" in msg_lower and "shubh" in msg_lower:
+            vendors = ["BrightNest Facility Services", "Shubh Services"]
+            title = "Housekeeping Services — Mumbai Office"
+            category = category or "Housekeeping"
+        elif "vendor 1" in msg_lower and "vendor 2" in msg_lower:
+            vendors = ["Vendor 1", "Vendor 2"]
+            title = "Facilities AMC"
+            category = category or "Facilities"
+
+        if not title and (category or vendors):
+            title = f"{category or 'Vendor'} Evaluation"
+
+        return ParsedEvaluationDetails(
+            title=title,
+            category=category,
+            vendor_names=vendors,
+        )
 
 
 GeminiClientFactory = Callable[[], GeminiClient]

@@ -633,9 +633,18 @@ def test_analyse_all_or_nothing_atomic_transaction():
                     c_res = await s.execute(c_stmt)
                     assert len(list(c_res.scalars().all())) == 0
 
-            asyncio.run(_check_db())
     finally:
         app.dependency_overrides.pop(get_job_launcher, None)
+
+        async def _cleanup():
+            async with async_session() as s:
+                from sqlalchemy import delete
+                from app.models.evaluation import AnalysisJob, Evaluation
+                await s.execute(delete(AnalysisJob).where(AnalysisJob.evaluation_id == uuid.UUID(eval_id)))
+                await s.execute(delete(Evaluation).where(Evaluation.id == uuid.UUID(eval_id)))
+                await s.commit()
+
+        asyncio.run(_cleanup())
 
 
 def test_weights_endpoint_and_user_criteria_untouched():

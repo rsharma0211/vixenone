@@ -7,6 +7,7 @@ from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoin
 from starlette.requests import Request
 from starlette.responses import Response
 
+from app.api.chat import router as chat_router
 from app.api.company import router as company_router
 from app.api.criteria import router as criteria_router
 from app.api.evaluations import router as evaluations_router
@@ -60,6 +61,7 @@ app.include_router(users_router)
 app.include_router(company_router)
 app.include_router(criteria_router)
 app.include_router(evaluations_router)
+app.include_router(chat_router)
 
 
 @app.get("/health")

@@ -302,6 +302,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/chat/turn": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Chat Turn */
+        post: operations["chat_turn_api_chat_turn_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/health": {
         parameters: {
             query?: never;
@@ -389,6 +406,108 @@ export interface components {
             kind: string;
             /** Vendor Id */
             vendor_id?: string | null;
+        };
+        /**
+         * ChatAction
+         * @enum {string}
+         */
+        ChatAction: "start" | "start_extraction" | "run_analysis" | "review_first" | "try_again" | "confirm_rerun";
+        /** ChatChoiceOption */
+        ChatChoiceOption: {
+            /** Action */
+            action: string;
+            /** Label */
+            label: string;
+            /** Link */
+            link?: string | null;
+        };
+        /** ChatCollectedDetails */
+        ChatCollectedDetails: {
+            /** Title */
+            title?: string | null;
+            /** Category */
+            category?: string | null;
+            /** Vendor Names */
+            vendor_names?: string[] | null;
+        };
+        /** ChatExpect */
+        ChatExpect: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "text" | "file" | "choice";
+            /** File Kind */
+            file_kind?: ("requirements" | "proposal") | null;
+            /** Vendor Id */
+            vendor_id?: string | null;
+            /** Vendor Name */
+            vendor_name?: string | null;
+            /** Options */
+            options?: components["schemas"]["ChatChoiceOption"][] | null;
+        };
+        /** ChatJobInfo */
+        ChatJobInfo: {
+            /** Id */
+            id?: string | null;
+            /** Status */
+            status: string;
+            /** Step Label */
+            step_label?: string | null;
+        };
+        /** ChatSummary */
+        ChatSummary: {
+            /** Vendors */
+            vendors: components["schemas"]["ChatVendorSummary"][];
+            /** Outcome */
+            outcome: string;
+            /** Recommended Vendor */
+            recommended_vendor?: string | null;
+            /** Reasons */
+            reasons?: string[];
+        };
+        /** ChatTurnRequest */
+        ChatTurnRequest: {
+            /** Evaluation Id */
+            evaluation_id?: string | null;
+            /** Message */
+            message?: string | null;
+            action?: components["schemas"]["ChatAction"] | null;
+            collected?: components["schemas"]["ChatCollectedDetails"] | null;
+        };
+        /** ChatTurnResponse */
+        ChatTurnResponse: {
+            /** Reply */
+            reply: string;
+            /** State */
+            state: string;
+            /** Evaluation Id */
+            evaluation_id?: string | null;
+            collected?: components["schemas"]["ChatCollectedDetails"] | null;
+            expect?: components["schemas"]["ChatExpect"] | null;
+            job?: components["schemas"]["ChatJobInfo"] | null;
+            summary?: components["schemas"]["ChatSummary"] | null;
+            /** Links */
+            links?: {
+                [key: string]: string;
+            } | null;
+        };
+        /** ChatVendorSummary */
+        ChatVendorSummary: {
+            /** Name */
+            name: string;
+            /** Total */
+            total: number;
+            /** Mandatory Met */
+            mandatory_met: string;
+            /** Mandatory Failures */
+            mandatory_failures: number;
+            /** Mandatory To Check */
+            mandatory_to_check: number;
+            /** Monthly Total */
+            monthly_total: string;
+            /** Needs Review Count */
+            needs_review_count: number;
         };
         /** CompanyResponse */
         CompanyResponse: {
@@ -1827,6 +1946,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EvaluationResultsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    chat_turn_api_chat_turn_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChatTurnRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatTurnResponse"];
                 };
             };
             /** @description Validation Error */
