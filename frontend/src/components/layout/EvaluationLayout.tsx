@@ -96,7 +96,7 @@ export const EvaluationLayout: React.FC = () => {
           {title || 'Evaluation'}
         </h1>
 
-        <p className="text-body text-muted">
+        <p className="text-body text-muted break-words">
           {locationLabel ? `${locationLabel} · ` : ''}
           {category ? `${category} · ` : ''}
           {savedRequirementCount} requirement{savedRequirementCount === 1 ? '' : 's'} (

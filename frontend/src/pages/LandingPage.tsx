@@ -129,7 +129,15 @@ export const LandingPage: React.FC = () => {
 
   // Scroll spy effect
   useEffect(() => {
-    const sectionIds = ['how-it-works', 'features', 'showcase', 'who-its-for', 'faq'];
+    const sectionIds = [
+      'how-it-works',
+      'features',
+      'showcase',
+      'who-its-for',
+      'pricing',
+      'coming-soon',
+      'faq',
+    ];
 
     const handleScroll = () => {
       const scrollPosition = window.scrollY + 120; // 64px header + offset
@@ -235,6 +243,8 @@ export const LandingPage: React.FC = () => {
               { id: 'features', label: 'Features' },
               { id: 'showcase', label: 'Showcase' },
               { id: 'who-its-for', label: "Who it's for" },
+              { id: 'pricing', label: 'Pricing' },
+              { id: 'coming-soon', label: 'Coming soon' },
               { id: 'faq', label: 'FAQ' },
             ].map(({ id, label }) => {
               const isActive = activeSection === id;
@@ -712,6 +722,98 @@ export const LandingPage: React.FC = () => {
           </div>
         </section>
 
+        {/* PRICING */}
+        <section id="pricing" className="py-20 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8 scroll-mt-16">
+          <Reveal delay={0} reducedMotion={prefersReducedMotion}>
+            <div className="space-y-2">
+              <h2 className="text-2xl sm:text-3xl font-bold text-text tracking-tight">
+                Pricing
+              </h2>
+            </div>
+          </Reveal>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <Reveal delay={0} reducedMotion={prefersReducedMotion}>
+              <div className="rounded-lg border border-border bg-background p-6 flex flex-col justify-between space-y-6 h-full transition-all duration-200 hover:-translate-y-[2px] hover:border-slate-300 motion-reduce:hover:translate-y-0">
+                <div className="space-y-2">
+                  <h3 className="text-base font-semibold text-text">Per evaluation</h3>
+                  <p className="text-sm text-muted">₹499 per evaluation + GST</p>
+                </div>
+                <Button
+                  variant="primary"
+                  className="w-full"
+                  onClick={() => navigate('/sign-up')}
+                >
+                  Get started
+                </Button>
+              </div>
+            </Reveal>
+
+            <Reveal delay={60} reducedMotion={prefersReducedMotion}>
+              <div className="rounded-lg border border-border bg-background p-6 flex flex-col justify-between space-y-6 h-full transition-all duration-200 hover:-translate-y-[2px] hover:border-slate-300 motion-reduce:hover:translate-y-0">
+                <div className="space-y-2">
+                  <h3 className="text-base font-semibold text-text">Monthly</h3>
+                  <p className="text-sm text-muted">₹999 per month + GST</p>
+                  <p className="text-sm text-muted">Unlimited evaluations</p>
+                </div>
+                <Button
+                  variant="primary"
+                  className="w-full"
+                  onClick={() => navigate('/sign-up')}
+                >
+                  Get started
+                </Button>
+              </div>
+            </Reveal>
+
+            <Reveal delay={120} reducedMotion={prefersReducedMotion}>
+              <div className="rounded-lg border border-border bg-background p-6 flex flex-col justify-between space-y-6 h-full transition-all duration-200 hover:-translate-y-[2px] hover:border-slate-300 motion-reduce:hover:translate-y-0">
+                <div className="space-y-2">
+                  <h3 className="text-base font-semibold text-text">Enterprise</h3>
+                  <p className="text-sm text-muted">Contact us</p>
+                </div>
+                <Button variant="primary" asChild className="w-full">
+                  <a href="mailto:hello@webitmore.com">Contact us</a>
+                </Button>
+              </div>
+            </Reveal>
+          </div>
+        </section>
+
+        {/* COMING SOON */}
+        <section id="coming-soon" className="bg-surface py-20 border-y border-border scroll-mt-16">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
+            <Reveal delay={0} reducedMotion={prefersReducedMotion}>
+              <div className="space-y-2">
+                <h2 className="text-2xl sm:text-3xl font-bold text-text tracking-tight">
+                  Coming soon
+                </h2>
+              </div>
+            </Reveal>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {[
+                'Bidding — vendors bid against the RFQ',
+                'Vendor onboarding and background verification',
+                'Facility & Service Management',
+                'Disaster Management',
+                'Approval Matrix',
+                'AI chat feature',
+              ].map((item, index) => (
+                <Reveal
+                  key={item}
+                  delay={index * 60}
+                  reducedMotion={prefersReducedMotion}
+                >
+                  <div className="rounded-lg border border-border bg-background p-6 h-full transition-all duration-200 hover:-translate-y-[2px] hover:border-slate-300 motion-reduce:hover:translate-y-0">
+                    <p className="text-sm font-medium text-text">{item}</p>
+                  </div>
+                </Reveal>
+              ))}
+            </div>
+          </div>
+        </section>
+
         {/* 7. FAQ */}
         <section id="faq" className="py-20 max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8 scroll-mt-16">
           <Reveal delay={0} reducedMotion={prefersReducedMotion}>
@@ -805,7 +907,15 @@ export const LandingPage: React.FC = () => {
             <img src="/logo.png" alt="VixenOne" className="h-10 w-auto max-w-full object-contain" />
           </div>
           <p className="text-xs text-muted">
-            Prototype · AI Builder Cup 2026
+            Powered by{' '}
+            <a
+              href="https://webitmore.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-text hover:text-navy underline-offset-4 hover:underline"
+            >
+              webITmore Technologies LLP
+            </a>
           </p>
         </div>
       </footer>

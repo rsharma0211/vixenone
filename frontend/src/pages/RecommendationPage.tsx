@@ -311,7 +311,7 @@ export const RecommendationPage: React.FC = () => {
         <h1 className="text-xl font-bold text-navy tracking-tight">
           {evaluationDetail?.title || 'Vendor Evaluation'}
         </h1>
-        <p className="text-xs text-muted">
+        <p className="text-xs text-muted break-words">
           Generated {formatPrintDate(new Date())}
           {results.company_name ? ` · Prepared for ${results.company_name}` : ''}
           {evaluationDetail?.category ? ` · ${evaluationDetail.category}` : ''}

@@ -405,7 +405,7 @@ export const EvaluationsListPage: React.FC = () => {
                     </td>
 
                     {/* Category */}
-                    <td className="py-3.5 px-4 text-sm text-muted truncate">
+                    <td className="py-3.5 px-4 text-sm text-muted max-w-[200px] truncate" title={ev.category}>
                       {ev.category}
                     </td>
 
