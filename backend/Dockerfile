@@ -32,7 +32,8 @@ FROM base AS production
 ENV ENV=production
 
 COPY . .
-RUN chmod +x /app/entrypoint.sh
+COPY dataset /app/dataset
+RUN chmod -R a-w /app/dataset && chmod +x /app/entrypoint.sh
 
 EXPOSE 8000
 ENTRYPOINT ["/app/entrypoint.sh"]

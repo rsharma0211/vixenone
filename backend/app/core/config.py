@@ -1,3 +1,4 @@
+from pathlib import Path
 from typing import Any, List, Optional, Union
 from pydantic import SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -25,6 +26,23 @@ class Settings(BaseSettings):
     STORAGE_BUCKET_NAME: Optional[str] = None
     GCS_BUCKET_NAME: Optional[str] = None
     UPLOAD_DIR: str = "/app/uploads"
+    DATASET_DIR: str = "/app/dataset"
+
+    @property
+    def dataset_path(self) -> Path:
+        configured = Path(self.DATASET_DIR)
+        if configured.is_dir():
+            return configured
+        root_dataset = Path("dataset")
+        if root_dataset.is_dir():
+            return root_dataset.resolve()
+        repo_dataset = Path(__file__).resolve().parents[3] / "dataset"
+        if repo_dataset.is_dir():
+            return repo_dataset
+        backend_dataset = Path(__file__).resolve().parents[2] / "dataset"
+        if backend_dataset.is_dir():
+            return backend_dataset
+        return configured
 
     @property
     def storage_bucket(self) -> Optional[str]:

@@ -95,9 +95,42 @@ def _map_level_display(
     return _LEVEL_DISPLAY_MAP.get(key, default)
 
 
+STORAGE_FILE_MISSING_ERROR = "This file is missing. Please upload it again."
+STORAGE_READ_FAILURE_ERROR = "This file could not be read. Please upload it again."
+
+
+class StorageFileNotFoundError(Exception):
+    """Raised when a document file cannot be found in storage."""
+
+    def __init__(self, message: str = STORAGE_FILE_MISSING_ERROR):
+        super().__init__(message)
+
+
+class StorageReadFailureError(Exception):
+    """Raised when a document file fails to read from storage."""
+
+    def __init__(self, message: str = STORAGE_READ_FAILURE_ERROR):
+        super().__init__(message)
+
+
 def _format_user_error(exc: BaseException, default_msg: str) -> str:
+    if isinstance(exc, (StorageFileNotFoundError, FileNotFoundError)):
+        return STORAGE_FILE_MISSING_ERROR
+    if isinstance(exc, StorageReadFailureError):
+        return STORAGE_READ_FAILURE_ERROR
     msg = str(exc).strip()
     if msg:
+        lower = msg.lower()
+        if "file not found" in lower or "no such file" in lower:
+            return STORAGE_FILE_MISSING_ERROR
+        if (
+            "evaluations/" in lower
+            or "/app/" in lower
+            or "uploads/" in lower
+            or "/" in msg
+            or "\\" in msg
+        ):
+            return default_msg
         return msg[:300]
     return default_msg
 
@@ -254,6 +287,7 @@ async def _run_extract_requirements(
     progress_lock = asyncio.Lock()
     completed_count = 0
     req_doc_error: Optional[str] = None
+    any_doc_error: Optional[str] = None
     req_doc_id: Optional[uuid.UUID] = None
 
     # Ensure requirements doc is processed first deterministically
@@ -277,7 +311,7 @@ async def _run_extract_requirements(
     storage = storage_factory()
 
     async def _process_one_document(desc: dict) -> None:
-        nonlocal completed_count, req_doc_error
+        nonlocal completed_count, req_doc_error, any_doc_error
         doc_id: uuid.UUID = desc["id"]
         doc_kind: str = desc["kind"]
         doc_mime: str = desc["mime"]
@@ -285,7 +319,27 @@ async def _run_extract_requirements(
 
         async with semaphore:
             try:
-                file_bytes = await storage.read(storage_key)
+                try:
+                    file_bytes = await storage.read(storage_key)
+                except FileNotFoundError as fnf_exc:
+                    logger.error(
+                        "Storage file missing: doc_id=%s storage_key=%s exc=%s",
+                        doc_id,
+                        storage_key,
+                        fnf_exc,
+                        exc_info=True,
+                    )
+                    raise StorageFileNotFoundError() from fnf_exc
+                except Exception as read_exc:
+                    logger.error(
+                        "Storage file read failed: doc_id=%s storage_key=%s exc=%s",
+                        doc_id,
+                        storage_key,
+                        read_exc,
+                        exc_info=True,
+                    )
+                    raise StorageReadFailureError() from read_exc
+
                 is_pdf = (
                     doc_mime == "application/pdf"
                     or storage_key.lower().endswith(".pdf")
@@ -322,6 +376,44 @@ async def _run_extract_requirements(
                         doc_row.updated_at = datetime.now(timezone.utc)
                     await doc_session.commit()
 
+            except StorageFileNotFoundError:
+                err_msg = STORAGE_FILE_MISSING_ERROR
+                logger.warning(
+                    "Document missing from storage: doc_id=%s kind=%s",
+                    doc_id,
+                    doc_kind,
+                )
+                async with session_factory() as doc_session:
+                    doc_row = await doc_session.get(Document, doc_id)
+                    if doc_row is not None:
+                        doc_row.status = "error"
+                        doc_row.error_message = err_msg
+                        doc_row.updated_at = datetime.now(timezone.utc)
+                    await doc_session.commit()
+                if doc_kind == "requirements":
+                    req_doc_error = err_msg
+                elif any_doc_error is None:
+                    any_doc_error = err_msg
+
+            except StorageReadFailureError:
+                err_msg = STORAGE_READ_FAILURE_ERROR
+                logger.warning(
+                    "Document storage read failed: doc_id=%s kind=%s",
+                    doc_id,
+                    doc_kind,
+                )
+                async with session_factory() as doc_session:
+                    doc_row = await doc_session.get(Document, doc_id)
+                    if doc_row is not None:
+                        doc_row.status = "error"
+                        doc_row.error_message = err_msg
+                        doc_row.updated_at = datetime.now(timezone.utc)
+                    await doc_session.commit()
+                if doc_kind == "requirements":
+                    req_doc_error = err_msg
+                elif any_doc_error is None:
+                    any_doc_error = err_msg
+
             except Exception as exc:
                 err_msg = _format_user_error(
                     exc, "Failed to extract text from document"
@@ -341,6 +433,8 @@ async def _run_extract_requirements(
                     await doc_session.commit()
                 if doc_kind == "requirements":
                     req_doc_error = err_msg
+                elif any_doc_error is None:
+                    any_doc_error = err_msg
 
             finally:
                 async with progress_lock:
@@ -358,10 +452,14 @@ async def _run_extract_requirements(
     await asyncio.gather(*(_process_one_document(d) for d in doc_descriptors))
 
     if req_doc_error is not None:
+        if req_doc_error in (STORAGE_FILE_MISSING_ERROR, STORAGE_READ_FAILURE_ERROR):
+            job_err = req_doc_error
+        else:
+            job_err = f"Requirements document extraction failed: {req_doc_error}"
         await _mark_job_failed(
             session_factory,
             job_id,
-            f"Requirements document extraction failed: {req_doc_error}",
+            job_err,
         )
         return
 

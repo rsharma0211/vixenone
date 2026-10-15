@@ -1,9 +1,13 @@
+import io
 from datetime import datetime, timezone
-from typing import Optional
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple, cast
 import uuid
-from sqlalchemy import func, select
+import pdfplumber
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.core.database import async_session
 from app.models.company import Location
 from app.models.evaluation import (
@@ -12,6 +16,7 @@ from app.models.evaluation import (
     CostBreakdown,
     CriterionScore,
     Document,
+    DocumentPage,
     Evaluation,
     Finding,
     Requirement,
@@ -21,6 +26,9 @@ from app.models.user import User
 from app.repositories.company_repo import CompanyRepository
 from app.repositories.criteria_repo import CriteriaRepository
 from app.schemas.criteria import BUILTIN_CRITERIA_DEFAULTS
+from app.services.document_validator import validate_document_content
+from app.services.ingestion import extract_docx_pages
+from app.services.storage import StorageService, get_storage
 
 DEMO_EMAIL = "demo@vixenone.app"
 DEMO_COMPANY_NAME = "Northbridge Properties Pvt Ltd"
@@ -32,7 +40,11 @@ DEMO_LOCATIONS = [
 ]
 
 
-async def seed_demo_data(session: Optional[AsyncSession] = None) -> None:
+async def seed_demo_data(
+    session: Optional[AsyncSession] = None,
+    storage: Optional[StorageService] = None,
+    dataset_dir: Optional[Path] = None,
+) -> None:
     """Seed complete demo dataset for demo user idempotently."""
     close_session = False
     if session is None:
@@ -61,10 +73,11 @@ async def seed_demo_data(session: Optional[AsyncSession] = None) -> None:
         await CriteriaRepository.get_or_create_builtins(session, user_id)
 
         # 3. Clean existing demo evaluations for demo user
-        existing_evals_stmt = select(Evaluation).where(Evaluation.user_id == user_id)
-        existing_evals = (await session.execute(existing_evals_stmt)).scalars().all()
-        for e in existing_evals:
-            await session.delete(e)
+        await session.execute(
+            delete(Evaluation)
+            .where(Evaluation.user_id == user_id)
+            .execution_options(synchronize_session=False)
+        )
         await session.flush()
 
         # 4. Upsert demo locations by name (case-insensitive) in order
@@ -177,57 +190,106 @@ async def seed_demo_data(session: Optional[AsyncSession] = None) -> None:
         session.add_all([v_brightnest, v_shubh, v_urbankleen])
         await session.flush()
 
-        # Documents for eval-1
-        doc_rfp = Document(
-            id=uuid.UUID("33333333-0000-1111-1111-111111111111"),
-            evaluation_id=eval_1.id,
-            vendor_id=None,
-            kind="requirements",
-            filename="RFP_Housekeeping_Andheri.pdf",
-            mime="application/pdf",
-            size_bytes=245000,
-            storage_key=f"evaluations/{eval_1.id}/RFP_Housekeeping_Andheri.pdf",
-            page_count=6,
-            status="ready",
-        )
-        doc_brightnest = Document(
-            id=uuid.UUID("33333333-1111-1111-1111-111111111111"),
-            evaluation_id=eval_1.id,
-            vendor_id=v_brightnest.id,
-            kind="proposal",
-            filename="BrightNest_Proposal.pdf",
-            mime="application/pdf",
-            size_bytes=512000,
-            storage_key=f"evaluations/{eval_1.id}/BrightNest_Proposal.pdf",
-            page_count=8,
-            status="ready",
-        )
-        doc_shubh = Document(
-            id=uuid.UUID("33333333-2222-1111-1111-111111111111"),
-            evaluation_id=eval_1.id,
-            vendor_id=v_shubh.id,
-            kind="proposal",
-            filename="Shubh_Proposal.docx",
-            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-            size_bytes=420000,
-            storage_key=f"evaluations/{eval_1.id}/Shubh_Proposal.docx",
-            page_count=10,
-            status="ready",
-        )
-        doc_urbankleen = Document(
-            id=uuid.UUID("33333333-3333-1111-1111-111111111111"),
-            evaluation_id=eval_1.id,
-            vendor_id=v_urbankleen.id,
-            kind="proposal",
-            filename="UrbanKleen_Proposal.pdf",
-            mime="application/pdf",
-            size_bytes=610000,
-            storage_key=f"evaluations/{eval_1.id}/UrbanKleen_Proposal.pdf",
-            page_count=9,
-            status="ready",
-        )
-        session.add_all([doc_rfp, doc_brightnest, doc_shubh, doc_urbankleen])
+        # Upload test-pack files into storage and seed documents with real sizes, page counts, and DocumentPage rows
+        storage_service = storage or get_storage()
+        dataset_base = dataset_dir or settings.dataset_path
+
+        doc_configs = [
+            {
+                "key": "doc_rfp",
+                "id": uuid.UUID("33333333-0000-1111-1111-111111111111"),
+                "vendor_id": None,
+                "kind": "requirements",
+                "filename": "RFP_Housekeeping_Andheri.pdf",
+                "dataset_rel": Path("requirements/01_Requirements_Andheri_Housekeeping.pdf"),
+            },
+            {
+                "key": "doc_brightnest",
+                "id": uuid.UUID("33333333-1111-1111-1111-111111111111"),
+                "vendor_id": v_brightnest.id,
+                "kind": "proposal",
+                "filename": "BrightNest_Proposal.pdf",
+                "dataset_rel": Path("proposals/02_BrightNest_Proposal.pdf"),
+            },
+            {
+                "key": "doc_shubh",
+                "id": uuid.UUID("33333333-2222-1111-1111-111111111111"),
+                "vendor_id": v_shubh.id,
+                "kind": "proposal",
+                "filename": "Shubh_Proposal.docx",
+                "dataset_rel": Path("proposals/03_Shubh_Proposal.docx"),
+            },
+            {
+                "key": "doc_urbankleen",
+                "id": uuid.UUID("33333333-3333-1111-1111-111111111111"),
+                "vendor_id": v_urbankleen.id,
+                "kind": "proposal",
+                "filename": "UrbanKleen_Proposal.pdf",
+                "dataset_rel": Path("proposals/04_UrbanKleen_Proposal.pdf"),
+            },
+        ]
+
+        seeded_docs: Dict[str, Document] = {}
+        for cfg in doc_configs:
+            rel_path: Path = cast(Path, cfg["dataset_rel"])
+            file_path = dataset_base / rel_path
+            filename = str(cfg["filename"])
+            if not file_path.is_file():
+                raise RuntimeError(
+                    f"Dataset file missing for seeded document: {file_path}. Cannot seed documents without real files."
+                )
+
+            content = file_path.read_bytes()
+            storage_key = f"evaluations/{eval_1.id}/{filename}"
+            await storage_service.save(storage_key, content)
+
+            detected_type, mime, page_count = validate_document_content(
+                content, filename
+            )
+            doc_obj = Document(
+                id=cast(uuid.UUID, cfg["id"]),
+                evaluation_id=eval_1.id,
+                vendor_id=cast(Optional[uuid.UUID], cfg["vendor_id"]),
+                kind=str(cfg["kind"]),
+                filename=filename,
+                mime=mime,
+                size_bytes=len(content),
+                storage_key=storage_key,
+                page_count=page_count or 1,
+                status="ready",
+            )
+            session.add(doc_obj)
+            seeded_docs[str(cfg["key"])] = doc_obj
+
+            if detected_type == "pdf":
+                with pdfplumber.open(io.BytesIO(content)) as pdf:
+                    for page_idx, page in enumerate(pdf.pages, start=1):
+                        text = page.extract_text() or ""
+                        session.add(
+                            DocumentPage(
+                                id=uuid.uuid4(),
+                                document_id=doc_obj.id,
+                                page_number=page_idx,
+                                text=text,
+                            )
+                        )
+            else:
+                docx_pages = extract_docx_pages(content)
+                for dp in docx_pages:
+                    session.add(
+                        DocumentPage(
+                            id=uuid.uuid4(),
+                            document_id=doc_obj.id,
+                            page_number=dp.page_number,
+                            text=dp.text,
+                        )
+                    )
+
         await session.flush()
+        doc_rfp = seeded_docs["doc_rfp"]
+        doc_brightnest = seeded_docs["doc_brightnest"]
+        doc_shubh = seeded_docs["doc_shubh"]
+        doc_urbankleen = seeded_docs["doc_urbankleen"]
 
         # 8 Requirements
         req_defs = [
@@ -262,7 +324,7 @@ async def seed_demo_data(session: Optional[AsyncSession] = None) -> None:
         await session.flush()
 
         # 24 Findings
-        findings_data = [
+        findings_data: List[Tuple[Any, ...]] = [
             # REQ-01
             (req_map["REQ-01"], v_brightnest, "Compliant", False, False, "High", "BrightNest commits to deploying 12 trained housekeeping operatives across the operational window 8:00 AM to 8:00 PM, Monday through Saturday.", doc_brightnest, 2, "§2.1 Staffing Schedule", [], None, None),
             (req_map["REQ-01"], v_shubh, "Compliant", False, False, "High", "A dedicated team of 14 housekeeping personnel (12 primary + 2 relievers) will be stationed on-site from 08:00 to 20:00, Mon–Sat.", doc_shubh, 3, "§1.2 Manpower Deployment", [], None, None),

@@ -1,4 +1,5 @@
 import logging
+from pathlib import Path
 from typing import Any
 
 from sqlalchemy import delete, func, select
@@ -12,6 +13,7 @@ from app.models.evaluation import Evaluation
 from app.models.user import User
 from app.schemas.user import UserProfileUpdate, UserRole
 from app.services.seed_demo import DEMO_EMAIL, seed_demo_data
+from app.services.storage import StorageService
 from app.services.user_service import UserService
 
 logger = logging.getLogger(__name__)
@@ -23,6 +25,8 @@ DEMO_DISPLAY_NAME = "Priya Sharma"
 async def run_seed(
     session: AsyncSession | None = None,
     auth_admin: Any | None = None,
+    storage: StorageService | None = None,
+    dataset_dir: Path | None = None,
 ) -> User:
     """Run idempotent seed:
     1. Look up demo@vixenone.app in Firebase; if missing, create it.
@@ -123,7 +127,7 @@ async def run_seed(
             )
 
         # 3. Run company, locations, criteria and demo-data seed
-        await seed_demo_data(session)
+        await seed_demo_data(session, storage=storage, dataset_dir=dataset_dir)
 
         return user
     finally:
