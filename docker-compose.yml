@@ -26,6 +26,8 @@ services:
       context: .
       dockerfile: infra/docker/firebase/Dockerfile
     container_name: vixenone-firebase-auth
+    entrypoint: []
+    command: firebase emulators:start --only auth --project ${PROJECT_ID:-demo-vixenone} --import /emulator-data/export --export-on-exit /emulator-data/export
     ports:
       - "4000:4000"   # Emulator Suite UI
       - "9099:9099"   # Auth Emulator
@@ -41,7 +43,7 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
-      start_period: 5s
+      start_period: 120s
     networks:
       vixenone-net:
         aliases:
