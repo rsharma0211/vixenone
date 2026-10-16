@@ -16,12 +16,12 @@ export const AskVixenFloatingButton: React.FC<AskVixenFloatingButtonProps> = ({
       aria-label="Ask Vixen"
       title="Ask Vixen"
       aria-expanded={isOpen}
-      className="fixed bottom-6 right-6 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-white shadow-md hover:shadow-lg transition-all ring-2 ring-orange focus:outline-none focus:ring-2 focus:ring-orange focus:ring-offset-2 border border-border/50 print:hidden cursor-pointer"
+      className="fixed bottom-6 right-6 z-40 flex h-[60px] w-[60px] items-center justify-center rounded-full bg-white shadow-md hover:shadow-lg transition-all ring-2 ring-orange focus:outline-none focus:ring-2 focus:ring-orange focus:ring-offset-2 border border-border/50 print:hidden cursor-pointer"
     >
       <img
         src="/fox.png"
-        alt=""
-        className="h-8 w-8 object-contain pointer-events-none"
+        alt="Ask Vixen"
+        className="h-12 w-12 scale-110 object-contain pointer-events-none"
       />
     </button>
   );

@@ -470,7 +470,11 @@ export const AskVixenPanel: React.FC<AskVixenPanelProps> = ({ isOpen, onClose })
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-accent-tint shrink-0">
         <div className="flex items-center gap-2">
-          <img src="/fox.png" alt="" className="h-6 w-6 object-contain pointer-events-none" />
+          <img
+            src="/fox.png"
+            alt="Ask Vixen"
+            className="h-7 w-7 scale-110 object-contain pointer-events-none"
+          />
           <span className="font-semibold text-text text-sm sm:text-base">Ask Vixen</span>
         </div>
         <div className="flex items-center gap-2">
