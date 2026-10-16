@@ -67,10 +67,38 @@ db-shell:
 	docker compose exec postgres psql -U vixenone -d vixenone
 
 test:
-	@if docker compose ps --services --filter "status=running" | grep -q "^api$$"; then \
-		docker compose exec -T api pytest tests; \
+	@set -e; \
+	PG_USER=$$(docker compose exec -T postgres printenv POSTGRES_USER 2>/dev/null | tr -d '\r\n'); \
+	PG_USER=$${PG_USER:-vixenone}; \
+	PG_DB=$$(docker compose exec -T postgres printenv POSTGRES_DB 2>/dev/null | tr -d '\r\n'); \
+	PG_DB=$${PG_DB:-vixenone}; \
+	PG_PASS=$$(docker compose exec -T postgres printenv POSTGRES_PASSWORD 2>/dev/null | tr -d '\r\n'); \
+	PG_PASS=$${PG_PASS:-vixenone}; \
+	TEST_DB="$${PG_DB}_test"; \
+	TEST_DB_URL="postgresql+psycopg://$${PG_USER}:$${PG_PASS}@postgres:5432/$${TEST_DB}"; \
+	TEST_UPLOAD_DIR="/tmp/test_uploads"; \
+	echo "Creating fresh test database $${TEST_DB}..."; \
+	docker compose exec -T postgres psql -U "$$PG_USER" -d postgres -c "DROP DATABASE IF EXISTS $${TEST_DB} WITH (FORCE);" >/dev/null; \
+	docker compose exec -T postgres psql -U "$$PG_USER" -d postgres -c "CREATE DATABASE $${TEST_DB};" >/dev/null; \
+	cleanup() { \
+		EXIT_CODE=$$?; \
+		echo "Dropping test database $${TEST_DB}..."; \
+		docker compose exec -T postgres psql -U "$$PG_USER" -d postgres -c "DROP DATABASE IF EXISTS $${TEST_DB} WITH (FORCE);" >/dev/null 2>&1 || true; \
+		if docker compose ps --services --filter "status=running" | grep -q "^api$$"; then \
+			docker compose exec -T api rm -rf "$$TEST_UPLOAD_DIR" >/dev/null 2>&1 || true; \
+		fi; \
+		exit $$EXIT_CODE; \
+	}; \
+	trap cleanup EXIT INT TERM; \
+	echo "Running migrations on $${TEST_DB}..."; \
+	if docker compose ps --services --filter "status=running" | grep -q "^api$$"; then \
+		docker compose exec -T -e DATABASE_URL="$$TEST_DB_URL" -e UPLOAD_DIR="$$TEST_UPLOAD_DIR" api alembic upgrade head && \
+		echo "Running tests against $${TEST_DB}..." && \
+		docker compose exec -T -e DATABASE_URL="$$TEST_DB_URL" -e UPLOAD_DIR="$$TEST_UPLOAD_DIR" api pytest tests $(ARGS); \
 	else \
-		docker compose run --rm -T api pytest tests; \
+		docker compose run --rm -T -e DATABASE_URL="$$TEST_DB_URL" -e UPLOAD_DIR="$$TEST_UPLOAD_DIR" api alembic upgrade head && \
+		echo "Running tests against $${TEST_DB}..." && \
+		docker compose run --rm -T -e DATABASE_URL="$$TEST_DB_URL" -e UPLOAD_DIR="$$TEST_UPLOAD_DIR" api pytest tests $(ARGS); \
 	fi
 
 types:

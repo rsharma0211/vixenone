@@ -7,7 +7,6 @@ from sqlalchemy import select
 from app.core.database import async_session
 from app.main import app
 from app.models.evaluation import Evaluation
-from app.models.user import User
 from app.services.seed_demo import seed_demo_data
 import asyncio
 
@@ -26,32 +25,10 @@ def demo_token():
 
 
 @pytest.fixture(autouse=True)
-def ensure_demo_seeded():
+def ensure_demo_seeded(seed_demo):
     global DEMO_UID
-    async def init():
-        async with async_session() as s:
-            from sqlalchemy import select
-            from app.models.company import Company
-            user = (await s.execute(select(User).where(User.email == "demo@vixenone.app"))).scalars().first()
-            if not user:
-                company = Company(
-                    id=uuid.UUID("00000000-0000-0000-0000-000000000099"),
-                    name="Northbridge Properties Pvt Ltd",
-                )
-                s.add(company)
-                await s.flush()
-                user = User(
-                    id=uuid.UUID("00000000-0000-0000-0000-000000000001"),
-                    company_id=company.id,
-                    firebase_uid="demo-uid-vixenone",
-                    email="demo@vixenone.app",
-                    display_name="Priya Sharma",
-                )
-                s.add(user)
-                await s.commit()
-            await seed_demo_data(s)
-            return user.firebase_uid
-    DEMO_UID = asyncio.run(init())
+    DEMO_UID = seed_demo.firebase_uid
+
 
 
 def test_demo_kpi_counts():
