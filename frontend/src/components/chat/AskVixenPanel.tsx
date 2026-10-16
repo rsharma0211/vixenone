@@ -34,26 +34,23 @@ interface AskVixenPanelProps {
 const parseConfirmCardDetails = (text: string, collected?: ChatCollectedDetails | null) => {
   const titleMatch = text.match(/•\s*Title:\s*(.+)/i);
   const catMatch = text.match(/•\s*Category:\s*(.+)/i);
-  const locMatch = text.match(/•\s*Location:\s*(.+)/i);
   const venMatch = text.match(/•\s*Vendors:\s*(.+)/i);
 
   return {
     title: titleMatch ? titleMatch[1].trim() : (collected?.title || '—'),
     category: catMatch ? catMatch[1].trim() : (collected?.category || '—'),
-    location: locMatch ? locMatch[1].trim() : 'None',
     vendors: venMatch ? venMatch[1].trim() : (collected?.vendor_names?.join(', ') || '—'),
   };
 };
 
 export const AskVixenPanel: React.FC<AskVixenPanelProps> = ({ isOpen, onClose }) => {
-  const location = useLocation();
+  const routeLocation = useLocation();
   const navigate = useNavigate();
 
   // In-memory conversation state only
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [currentEvaluationId, setCurrentEvaluationId] = useState<string | null>(null);
   const [collectedDetails, setCollectedDetails] = useState<ChatCollectedDetails | null>(null);
-  const [isDetached, setIsDetached] = useState<boolean>(false);
 
   const [inputText, setInputText] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(false);
@@ -64,7 +61,16 @@ export const AskVixenPanel: React.FC<AskVixenPanelProps> = ({ isOpen, onClose })
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
-  const lastAttachedPathRef = useRef<string | null>(null);
+
+  const currentEvaluationIdRef = useRef<string | null>(null);
+  currentEvaluationIdRef.current = currentEvaluationId;
+
+  const collectedDetailsRef = useRef<ChatCollectedDetails | null>(null);
+  collectedDetailsRef.current = collectedDetails;
+
+  const prevIsOpenRef = useRef<boolean>(false);
+  const greetingSentRef = useRef<boolean>(false);
+  const detachedEvalIdRef = useRef<string | null>(null);
 
   const latestMessage = messages[messages.length - 1];
   const latestExpect = latestMessage?.sender === 'assistant' ? latestMessage.expect : null;
@@ -106,11 +112,13 @@ export const AskVixenPanel: React.FC<AskVixenPanelProps> = ({ isOpen, onClose })
     (res: ChatTurnResponse) => {
       if (res.evaluation_id) {
         setCurrentEvaluationId(res.evaluation_id);
-        setIsDetached(false);
+        currentEvaluationIdRef.current = res.evaluation_id;
+        detachedEvalIdRef.current = null;
         notifyEvaluationChanged(res.evaluation_id);
       }
       if (res.collected) {
         setCollectedDetails(res.collected);
+        collectedDetailsRef.current = res.collected;
       }
 
       setMessages((prev) => {
@@ -225,11 +233,11 @@ export const AskVixenPanel: React.FC<AskVixenPanelProps> = ({ isOpen, onClose })
         const evalId =
           payload.evaluation_id !== undefined
             ? payload.evaluation_id
-            : (isDetached ? null : currentEvaluationId);
+            : currentEvaluationIdRef.current;
         const coll =
           payload.collected !== undefined
             ? payload.collected
-            : (payload.evaluation_id === null ? null : collectedDetails);
+            : (payload.evaluation_id === null ? null : collectedDetailsRef.current);
         const res = await apiClient.chatTurn({
           evaluation_id: evalId,
           message: payload.message ?? null,
@@ -253,42 +261,46 @@ export const AskVixenPanel: React.FC<AskVixenPanelProps> = ({ isOpen, onClose })
         setLoading(false);
       }
     },
-    [currentEvaluationId, collectedDetails, isDetached, applyTurnResponse]
+    [applyTurnResponse]
   );
 
   // Initialize or attach context when opened
   useEffect(() => {
+    const wasOpen = prevIsOpenRef.current;
+    prevIsOpenRef.current = isOpen;
+
     if (!isOpen) {
-      setIsDetached(false);
       return;
     }
 
-    const match = location.pathname.match(/\/evaluations\/([^/]+)/);
-    const routeEvalId = match && match[1] !== 'new' ? match[1] : null;
-
-    if (lastAttachedPathRef.current && lastAttachedPathRef.current !== location.pathname) {
-      setIsDetached(false);
-    }
-    lastAttachedPathRef.current = location.pathname;
-
-    if (isDetached) return;
-
-    if (routeEvalId) {
-      if (currentEvaluationId !== routeEvalId) {
-        setCurrentEvaluationId(routeEvalId);
-        setCollectedDetails(null);
-        setMessages([]);
-        sendTurn({ evaluation_id: routeEvalId });
+    if (!wasOpen) {
+      // 1. Once chat has an evaluation id, only "Start new" clears it.
+      if (currentEvaluationIdRef.current !== null) {
+        return;
       }
-    } else {
-      if (currentEvaluationId !== null || messages.length === 0) {
-        setCurrentEvaluationId(null);
+
+      // 2. Opening chat on an evaluation page attaches to it only when chat has no evaluation of its own.
+      const match = routeLocation.pathname.match(/\/evaluations\/([^/]+)/);
+      const routeEvalId = match && match[1] !== 'new' ? match[1] : null;
+
+      if (routeEvalId && routeEvalId !== detachedEvalIdRef.current) {
+        setCurrentEvaluationId(routeEvalId);
+        currentEvaluationIdRef.current = routeEvalId;
         setCollectedDetails(null);
+        collectedDetailsRef.current = null;
         setMessages([]);
+        greetingSentRef.current = true;
+        sendTurn({ evaluation_id: routeEvalId });
+        return;
+      }
+
+      // 3. Fresh conversation without evaluation: send greeting once
+      if (!greetingSentRef.current && messages.length === 0) {
+        greetingSentRef.current = true;
         sendTurn({ evaluation_id: null });
       }
     }
-  }, [isOpen, location.pathname, isDetached, currentEvaluationId, messages.length, sendTurn]);
+  }, [isOpen, routeLocation.pathname, sendTurn, messages.length]);
 
   // Polling every 2 s while a job runs and panel is open
   useEffect(() => {
@@ -311,15 +323,21 @@ export const AskVixenPanel: React.FC<AskVixenPanelProps> = ({ isOpen, onClose })
   }, [isOpen, currentEvaluationId, isJobRunning, applyTurnResponse]);
 
   const handleStartNew = () => {
-    setIsDetached(true);
+    const match = routeLocation.pathname.match(/\/evaluations\/([^/]+)/);
+    const routeEvalId = match && match[1] !== 'new' ? match[1] : null;
+    detachedEvalIdRef.current = routeEvalId;
+
     setCurrentEvaluationId(null);
+    currentEvaluationIdRef.current = null;
     setCollectedDetails(null);
+    collectedDetailsRef.current = null;
     setMessages([]);
     setInputText('');
     setUploadError(null);
     setSlotErrors({});
     setUploadingSlotKey(null);
     setUploading(false);
+    greetingSentRef.current = true;
     sendTurn({ evaluation_id: null, collected: null });
   };
 
@@ -540,9 +558,6 @@ export const AskVixenPanel: React.FC<AskVixenPanelProps> = ({ isOpen, onClose })
 
                                 <dt className="text-muted font-medium">Category:</dt>
                                 <dd className="text-text">{details.category}</dd>
-
-                                <dt className="text-muted font-medium">Location:</dt>
-                                <dd className="text-text">{details.location}</dd>
 
                                 <dt className="text-muted font-medium">Vendors:</dt>
                                 <dd className="text-text">{details.vendors}</dd>
