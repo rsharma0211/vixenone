@@ -399,11 +399,58 @@ export const AskVixenPanel: React.FC<AskVixenPanelProps> = ({ isOpen, onClose })
     setUploadingSlotKey(slotKey);
 
     try {
-      await apiClient.uploadDocument(
+      const doc = await apiClient.uploadDocument(
         currentEvaluationId,
         file,
         slot.kind,
         slot.vendor_id ?? undefined
+      );
+
+      const uploadedFilename = doc.filename || file.name;
+
+      // Update slot in the card immediately upon successful upload
+      setMessages((prev) =>
+        prev.map((msg) => {
+          if (msg.expect?.kind !== 'files' || !msg.expect.files) {
+            return msg;
+          }
+
+          const hasMatchingSlot = msg.expect.files.some(
+            (s) => s.kind === slot.kind && (s.vendor_id ?? '') === (slot.vendor_id ?? '')
+          );
+          if (!hasMatchingSlot) {
+            return msg;
+          }
+
+          const updatedFiles = msg.expect.files.map((s) => {
+            if (s.kind === slot.kind && (s.vendor_id ?? '') === (slot.vendor_id ?? '')) {
+              return {
+                ...s,
+                uploaded: true,
+                filename: uploadedFilename,
+              };
+            }
+            return s;
+          });
+
+          const uploadedCount = updatedFiles.filter((s) => s.uploaded).length;
+          const totalCount = updatedFiles.length;
+          let updatedText = msg.text;
+          if (uploadedCount === totalCount) {
+            updatedText = 'All documents uploaded.';
+          } else if (msg.text.includes('documents') || msg.text.includes('upload')) {
+            updatedText = `${uploadedCount} of ${totalCount} documents uploaded. Please upload the remaining documents.`;
+          }
+
+          return {
+            ...msg,
+            text: updatedText,
+            expect: {
+              ...msg.expect,
+              files: updatedFiles,
+            },
+          };
+        })
       );
 
       notifyEvaluationChanged(currentEvaluationId);
@@ -602,6 +649,8 @@ export const AskVixenPanel: React.FC<AskVixenPanelProps> = ({ isOpen, onClose })
                               slot.kind === 'requirements'
                                 ? 'Requirements document'
                                 : `Proposal — ${slot.vendor_name || 'Vendor'}`;
+                            const isCardInteractive =
+                              isLatest && latestState === 'upload_files' && !isJobRunning;
 
                             return (
                               <div key={idx} className="py-2 first:pt-1 last:pb-0 flex flex-col gap-1">
@@ -617,11 +666,11 @@ export const AskVixenPanel: React.FC<AskVixenPanelProps> = ({ isOpen, onClose })
                                         {slot.filename || 'Uploaded'}
                                       </span>
                                     </div>
-                                  ) : (
+                                  ) : isCardInteractive ? (
                                     <div>
                                       <input
                                         type="file"
-                                        id={`slot-file-input-${idx}`}
+                                        id={`slot-file-input-${msg.id}-${idx}`}
                                         accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                                         className="hidden"
                                         onChange={(e) => {
@@ -639,11 +688,10 @@ export const AskVixenPanel: React.FC<AskVixenPanelProps> = ({ isOpen, onClose })
                                           loading ||
                                           uploading ||
                                           isJobRunning ||
-                                          Boolean(uploadingSlotKey) ||
-                                          !isLatest
+                                          Boolean(uploadingSlotKey)
                                         }
                                         onClick={() =>
-                                          document.getElementById(`slot-file-input-${idx}`)?.click()
+                                          document.getElementById(`slot-file-input-${msg.id}-${idx}`)?.click()
                                         }
                                         className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-md border border-orange text-navy hover:bg-orange hover:text-navy active:bg-orange active:text-navy transition-colors disabled:opacity-50 cursor-pointer"
                                       >
@@ -660,6 +708,8 @@ export const AskVixenPanel: React.FC<AskVixenPanelProps> = ({ isOpen, onClose })
                                         )}
                                       </button>
                                     </div>
+                                  ) : (
+                                    <span className="text-muted text-xs">Not uploaded</span>
                                   )}
                                 </div>
                                 {slotError && (
