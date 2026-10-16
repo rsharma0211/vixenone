@@ -424,15 +424,8 @@ export interface components {
             title?: string | null;
             /** Category */
             category?: string | null;
-            /** Location Id */
-            location_id?: string | null;
             /** Vendor Names */
             vendor_names?: string[] | null;
-            /**
-             * No Location
-             * @default false
-             */
-            no_location: boolean | null;
             /**
              * Is Change Mode
              * @default false

@@ -15,7 +15,7 @@ from app.llm.client import (
     PageText,
 )
 from app.main import app
-from app.models.company import Company, Location
+from app.models.company import Company
 from app.models.evaluation import AnalysisJob, Evaluation
 from app.models.user import User
 from app.schemas.user import UserRole
@@ -428,7 +428,7 @@ async def test_active_job_plain_english_reply_no_500():
             await s.commit()
 
 
-def test_summary_seeded_demo_evaluation_matches_results():
+def test_summary_seeded_demo_evaluation_matches_results(seed_demo):
     """Summary for the seeded demo evaluation shows totals 64 / 86 / 58 and matches the results endpoint exactly."""
     async def get_demo_uid():
         async with async_session() as s:
@@ -622,7 +622,7 @@ async def test_confirm_before_create_and_change_details():
             reply = d1["reply"]
             assert "Title:" in reply
             assert "Category:" in reply
-            assert "Location:" in reply
+            assert "Location:" not in reply
             assert "Vendors:" in reply
             assert "Facilities / Housekeeping" in reply
             assert "BrightNest" in reply and "Shubh" in reply
@@ -769,113 +769,6 @@ def test_category_mapping():
 
     finally:
         app.dependency_overrides.clear()
-
-
-@pytest.mark.asyncio
-async def test_location_mapping_and_validation():
-    """Location: matched by name; matched by city; no match → choices incl. 'No location'; another company's location id → rejected."""
-    user_uid = f"uid-chat-loc-{uuid.uuid4().hex}"
-    auth = {"Authorization": "Bearer token"}
-    fake_gemini = _build_test_fake_gemini()
-
-    app.dependency_overrides[get_gemini_client] = lambda: fake_gemini
-
-    company_id = uuid.uuid4()
-    loc1_id = uuid.uuid4()
-    loc2_id = uuid.uuid4()
-    foreign_loc_id = uuid.uuid4()
-    foreign_company_id = uuid.uuid4()
-
-    async with async_session() as s:
-        # User company & locations
-        co = Company(id=company_id, name="Test Chat Co")
-        s.add(co)
-        loc1 = Location(id=loc1_id, company_id=company_id, name="Andheri East Office", city="Mumbai")
-        loc2 = Location(id=loc2_id, company_id=company_id, name="Headquarters", city="Pune")
-        s.add_all([loc1, loc2])
-
-        # Foreign company & location
-        co_foreign = Company(id=foreign_company_id, name="Foreign Co")
-        s.add(co_foreign)
-        foreign_loc = Location(id=foreign_loc_id, company_id=foreign_company_id, name="Foreign Site", city="Delhi")
-        s.add(foreign_loc)
-
-        # Create user
-        usr = User(id=uuid.uuid4(), firebase_uid=user_uid, email="loc_user@vixenone.app", display_name="Loc User", role=UserRole.FACILITIES_MANAGER, company_id=company_id)
-        s.add(usr)
-        await s.commit()
-
-    try:
-        with patch("firebase_admin.auth.verify_id_token", return_value=_token(user_uid)):
-            # 1. Matched by name
-            r1 = client.post(
-                "/api/chat/turn",
-                headers=auth,
-                json={"message": "Evaluate Housekeeping between BrightNest and Shubh location: Andheri East"},
-            )
-            assert r1.status_code == 200
-            d1 = r1.json()
-            assert d1["state"] == "confirm_details"
-            assert str(d1["collected"]["location_id"]) == str(loc1_id)
-            assert "Andheri East Office" in d1["reply"]
-
-            # 2. Matched by city ("Pune")
-            r2 = client.post(
-                "/api/chat/turn",
-                headers=auth,
-                json={"message": "Evaluate Housekeeping between BrightNest and Shubh location: Pune"},
-            )
-            assert r2.status_code == 200
-            d2 = r2.json()
-            assert d2["state"] == "confirm_details"
-            assert str(d2["collected"]["location_id"]) == str(loc2_id)
-            assert "Headquarters" in d2["reply"]
-
-            # 3. No match ("Delhi") -> returns choice including "No location"
-            r3 = client.post(
-                "/api/chat/turn",
-                headers=auth,
-                json={"message": "Evaluate Housekeeping between BrightNest and Shubh location: Delhi"},
-            )
-            assert r3.status_code == 200
-            d3 = r3.json()
-            assert d3["state"] == "collecting_details"
-            assert d3["expect"]["kind"] == "choice"
-            labels3 = [opt["label"] for opt in d3["expect"]["options"]]
-            values3 = [opt["value"] for opt in d3["expect"]["options"]]
-            assert "No location" in labels3
-            assert "none" in values3
-            assert str(loc1_id) in values3
-            assert str(loc2_id) in values3
-
-            # Selecting "No location" proceeds to confirm_details with None location
-            r3_none = client.post(
-                "/api/chat/turn",
-                headers=auth,
-                json={"action": "select_location", "value": "none", "collected": d3["collected"]},
-            )
-            assert r3_none.status_code == 200
-            d3_none = r3_none.json()
-            assert d3_none["state"] == "confirm_details"
-            assert d3_none["collected"]["location_id"] is None
-            assert "Location: None" in d3_none["reply"]
-
-            # 4. Another company's location id -> 400 rejected
-            r4_foreign = client.post(
-                "/api/chat/turn",
-                headers=auth,
-                json={"action": "select_location", "value": str(foreign_loc_id), "collected": d3["collected"]},
-            )
-            assert r4_foreign.status_code == 400
-            assert "Location does not belong to company" in r4_foreign.json()["detail"]
-
-    finally:
-        app.dependency_overrides.clear()
-        async with async_session() as s:
-            await s.execute(delete(Location).where(Location.company_id.in_([company_id, foreign_company_id])))
-            await s.execute(delete(User).where(User.firebase_uid == user_uid))
-            await s.execute(delete(Company).where(Company.id.in_([company_id, foreign_company_id])))
-            await s.commit()
 
 
 @pytest.mark.asyncio
@@ -1034,186 +927,6 @@ def test_reasons_contain_no_decimals_or_forbidden_words():
 
 
 @pytest.mark.asyncio
-async def test_details_worli_not_saved_then_security_category_merge():
-    """'test 2 at worli' -> title 'test 2', Worli isn't saved, choices = all locations + 'No location'.
-    Then 'security' -> category Facilities / Security; title still 'test 2'.
-    Then vendors -> asks location with choices; 'No location' -> confirm shows Location: None and not asked again."""
-    user_uid = f"uid-chat-worli-{uuid.uuid4().hex}"
-    auth = {"Authorization": "Bearer token"}
-    fake_gemini = _build_test_fake_gemini()
-
-    app.dependency_overrides[get_gemini_client] = lambda: fake_gemini
-
-    company_id = uuid.uuid4()
-    loc1_id = uuid.uuid4()
-    loc2_id = uuid.uuid4()
-
-    async with async_session() as s:
-        co = Company(id=company_id, name="Worli Co")
-        s.add(co)
-        loc1 = Location(id=loc1_id, company_id=company_id, name="Andheri East Office", city="Mumbai")
-        loc2 = Location(id=loc2_id, company_id=company_id, name="BKC Office", city="Mumbai")
-        s.add_all([loc1, loc2])
-        usr = User(
-            id=uuid.uuid4(),
-            firebase_uid=user_uid,
-            email="worli_user@vixenone.app",
-            display_name="Worli User",
-            role=UserRole.FACILITIES_MANAGER,
-            company_id=company_id,
-        )
-        s.add(usr)
-        await s.commit()
-
-    try:
-        with patch("firebase_admin.auth.verify_id_token", return_value=_token(user_uid)):
-            # 1. "test 2 at worli"
-            r1 = client.post(
-                "/api/chat/turn",
-                headers=auth,
-                json={"message": "test 2 at worli"},
-            )
-            assert r1.status_code == 200
-            d1 = r1.json()
-            assert d1["state"] == "collecting_details"
-            assert d1["collected"]["title"] == "test 2"
-            assert d1["collected"]["location_id"] is None
-            assert "Worli isn't one of your saved locations" in d1["reply"]
-            assert d1["expect"]["kind"] == "choice"
-            labels1 = [opt["label"] for opt in d1["expect"]["options"]]
-            values1 = [opt["value"] for opt in d1["expect"]["options"]]
-            assert "No location" in labels1
-            assert "none" in values1
-            assert str(loc1_id) in values1
-            assert str(loc2_id) in values1
-
-            # 2. Then "security" -> category Facilities / Security, title still "test 2"
-            r2 = client.post(
-                "/api/chat/turn",
-                headers=auth,
-                json={"message": "security", "collected": d1["collected"]},
-            )
-            assert r2.status_code == 200
-            d2 = r2.json()
-            assert d2["state"] == "collecting_details"
-            assert d2["collected"]["category"] == "Facilities / Security"
-            assert d2["collected"]["title"] == "test 2"
-            assert "vendor" in d2["reply"]
-
-            # 3. Provide vendors -> location still not resolved, asks once with all locations + "No location"
-            r3 = client.post(
-                "/api/chat/turn",
-                headers=auth,
-                json={"message": "vendor a and vendor b", "collected": d2["collected"]},
-            )
-            assert r3.status_code == 200
-            d3 = r3.json()
-            assert d3["state"] == "collecting_details"
-            assert d3["expect"]["kind"] == "choice"
-            assert "Which location is this evaluation for?" in d3["reply"]
-            opts3 = [opt["label"] for opt in d3["expect"]["options"]]
-            assert "No location" in opts3
-
-            # 4. "No location" -> confirm shows Location: None; not asked again
-            r4 = client.post(
-                "/api/chat/turn",
-                headers=auth,
-                json={"action": "select_location", "value": "none", "collected": d3["collected"]},
-            )
-            assert r4.status_code == 200
-            d4 = r4.json()
-            assert d4["state"] == "confirm_details"
-            assert d4["collected"]["no_location"] is True
-            assert d4["collected"]["location_id"] is None
-            assert "Location: None" in d4["reply"]
-            assert "Title: test 2" in d4["reply"]
-            assert "Category: Facilities / Security" in d4["reply"]
-            assert "Vendor A, Vendor B" in d4["reply"]
-
-    finally:
-        app.dependency_overrides.clear()
-        async with async_session() as s:
-            await s.execute(delete(Location).where(Location.company_id == company_id))
-            await s.execute(delete(User).where(User.firebase_uid == user_uid))
-            await s.execute(delete(Company).where(Company.id == company_id))
-            await s.commit()
-
-
-@pytest.mark.asyncio
-async def test_location_andheri_single_match_and_mumbai_several_matches():
-    """'Andheri' -> Andheri East Office set. 'Mumbai' -> choices of the Mumbai locations + 'No location'."""
-    user_uid = f"uid-chat-andheri-{uuid.uuid4().hex}"
-    auth = {"Authorization": "Bearer token"}
-    fake_gemini = _build_test_fake_gemini()
-
-    app.dependency_overrides[get_gemini_client] = lambda: fake_gemini
-
-    company_id = uuid.uuid4()
-    loc1_id = uuid.uuid4()
-    loc2_id = uuid.uuid4()
-    loc3_id = uuid.uuid4()
-
-    async with async_session() as s:
-        co = Company(id=company_id, name="City Co")
-        s.add(co)
-        loc1 = Location(id=loc1_id, company_id=company_id, name="Andheri East Office", city="Mumbai")
-        loc2 = Location(id=loc2_id, company_id=company_id, name="BKC Office", city="Mumbai")
-        loc3 = Location(id=loc3_id, company_id=company_id, name="Headquarters", city="Pune")
-        s.add_all([loc1, loc2, loc3])
-        usr = User(
-            id=uuid.uuid4(),
-            firebase_uid=user_uid,
-            email="city_user@vixenone.app",
-            display_name="City User",
-            role=UserRole.FACILITIES_MANAGER,
-            company_id=company_id,
-        )
-        s.add(usr)
-        await s.commit()
-
-    try:
-        with patch("firebase_admin.auth.verify_id_token", return_value=_token(user_uid)):
-            # 1. "Andheri" -> single match -> Andheri East Office set
-            r1 = client.post(
-                "/api/chat/turn",
-                headers=auth,
-                json={"message": "Evaluate Housekeeping between BrightNest and Shubh location: Andheri"},
-            )
-            assert r1.status_code == 200
-            d1 = r1.json()
-            assert d1["state"] == "confirm_details"
-            assert str(d1["collected"]["location_id"]) == str(loc1_id)
-            assert "Andheri East Office" in d1["reply"]
-
-            # 2. "Mumbai" -> several matches -> choices of Mumbai locations + "No location"
-            r2 = client.post(
-                "/api/chat/turn",
-                headers=auth,
-                json={"message": "Evaluate Housekeeping between BrightNest and Shubh location: Mumbai"},
-            )
-            assert r2.status_code == 200
-            d2 = r2.json()
-            assert d2["state"] == "collecting_details"
-            assert d2["expect"]["kind"] == "choice"
-            opts2 = [opt["label"] for opt in d2["expect"]["options"]]
-            values2 = [opt["value"] for opt in d2["expect"]["options"]]
-            assert "Andheri East Office (Mumbai)" in opts2
-            assert "BKC Office (Mumbai)" in opts2
-            assert "No location" in opts2
-            # Pune Headquarters should NOT be in the Mumbai choices
-            assert "Headquarters (Pune)" not in opts2
-            assert str(loc3_id) not in values2
-
-    finally:
-        app.dependency_overrides.clear()
-        async with async_session() as s:
-            await s.execute(delete(Location).where(Location.company_id == company_id))
-            await s.execute(delete(User).where(User.firebase_uid == user_uid))
-            await s.execute(delete(Company).where(Company.id == company_id))
-            await s.commit()
-
-
-@pytest.mark.asyncio
 async def test_no_category_mentioned_then_other_then_custom_category():
     """No category mentioned -> choices both + 'Other'; 'Other' -> text 'Type your category.' -> custom category."""
     user_uid = f"uid-chat-nocat-{uuid.uuid4().hex}"
@@ -1270,362 +983,18 @@ async def test_no_category_mentioned_then_other_then_custom_category():
 
 
 @pytest.mark.asyncio
-async def test_change_details_location_powai():
-    """Change details 'location Powai' -> only location changes, title/category/vendors remain untouched."""
-    user_uid = f"uid-chat-chpowai-{uuid.uuid4().hex}"
-    auth = {"Authorization": "Bearer token"}
-    fake_gemini = _build_test_fake_gemini()
-
-    app.dependency_overrides[get_gemini_client] = lambda: fake_gemini
-
-    company_id = uuid.uuid4()
-    loc1_id = uuid.uuid4()
-    loc2_id = uuid.uuid4()
-
-    async with async_session() as s:
-        co = Company(id=company_id, name="Powai Co")
-        s.add(co)
-        loc1 = Location(id=loc1_id, company_id=company_id, name="Andheri East Office", city="Mumbai")
-        loc2 = Location(id=loc2_id, company_id=company_id, name="Powai Campus", city="Mumbai")
-        s.add_all([loc1, loc2])
-        usr = User(
-            id=uuid.uuid4(),
-            firebase_uid=user_uid,
-            email="powai_user@vixenone.app",
-            display_name="Powai User",
-            role=UserRole.FACILITIES_MANAGER,
-            company_id=company_id,
-        )
-        s.add(usr)
-        await s.commit()
-
-    try:
-        with patch("firebase_admin.auth.verify_id_token", return_value=_token(user_uid)):
-            # Initial setup with Andheri East Office
-            r1 = client.post(
-                "/api/chat/turn",
-                headers=auth,
-                json={"message": "Evaluate Housekeeping between BrightNest and Shubh location: Andheri"},
-            )
-            assert r1.status_code == 200
-            d1 = r1.json()
-            assert d1["state"] == "confirm_details"
-            assert str(d1["collected"]["location_id"]) == str(loc1_id)
-            orig_title = d1["collected"]["title"]
-            orig_cat = d1["collected"]["category"]
-            orig_vendors = d1["collected"]["vendor_names"]
-
-            # Click "Change details" -> "Tell me what to change."
-            r2 = client.post(
-                "/api/chat/turn",
-                headers=auth,
-                json={"action": "change_details", "collected": d1["collected"]},
-            )
-            assert r2.status_code == 200
-            d2 = r2.json()
-            assert d2["reply"] == "Tell me what to change."
-            assert d2["collected"]["is_change_mode"] is True
-
-            # Send "location Powai"
-            r3 = client.post(
-                "/api/chat/turn",
-                headers=auth,
-                json={"message": "location Powai", "collected": d2["collected"]},
-            )
-            assert r3.status_code == 200
-            d3 = r3.json()
-            assert d3["state"] == "confirm_details"
-            assert str(d3["collected"]["location_id"]) == str(loc2_id)
-            assert "Powai Campus" in d3["reply"]
-            assert d3["collected"]["title"] == orig_title
-            assert d3["collected"]["category"] == orig_cat
-            assert d3["collected"]["vendor_names"] == orig_vendors
-
-    finally:
-        app.dependency_overrides.clear()
-        async with async_session() as s:
-            await s.execute(delete(Location).where(Location.company_id == company_id))
-            await s.execute(delete(User).where(User.firebase_uid == user_uid))
-            await s.execute(delete(Company).where(Company.id == company_id))
-            await s.commit()
-
-
-@pytest.mark.asyncio
-async def test_change_details_unmatched_location_worli():
-    """Change details 'location - worli' -> reply says Worli isn't saved, choices = all locations + 'No location', title/category/vendors unchanged, no confirm card until a choice is made."""
-    user_uid = f"uid-chat-chworli-{uuid.uuid4().hex}"
-    auth = {"Authorization": "Bearer token"}
-    fake_gemini = _build_test_fake_gemini()
-    app.dependency_overrides[get_gemini_client] = lambda: fake_gemini
-
-    company_id = uuid.uuid4()
-    loc1_id = uuid.uuid4()
-    loc2_id = uuid.uuid4()
-
-    async with async_session() as s:
-        co = Company(id=company_id, name="Worli Test Co")
-        s.add(co)
-        loc1 = Location(id=loc1_id, company_id=company_id, name="Andheri East Office", city="Mumbai")
-        loc2 = Location(id=loc2_id, company_id=company_id, name="Powai Campus", city="Mumbai")
-        s.add_all([loc1, loc2])
-        usr = User(
-            id=uuid.uuid4(),
-            firebase_uid=user_uid,
-            email="worli_user@vixenone.app",
-            display_name="Worli User",
-            role=UserRole.FACILITIES_MANAGER,
-            company_id=company_id,
-        )
-        s.add(usr)
-        await s.commit()
-
-    try:
-        with patch("firebase_admin.auth.verify_id_token", return_value=_token(user_uid)):
-            # Initial setup with No location
-            r1 = client.post(
-                "/api/chat/turn",
-                headers=auth,
-                json={"message": "Evaluate Housekeeping between BrightNest and Shubh location: none"},
-            )
-            assert r1.status_code == 200
-            d1 = r1.json()
-            assert d1["state"] == "confirm_details"
-            assert d1["collected"]["location_id"] is None
-            orig_title = d1["collected"]["title"]
-            orig_cat = d1["collected"]["category"]
-            orig_vendors = d1["collected"]["vendor_names"]
-
-            # Click "Change details" -> "Tell me what to change."
-            r2 = client.post(
-                "/api/chat/turn",
-                headers=auth,
-                json={"action": "change_details", "collected": d1["collected"]},
-            )
-            assert r2.status_code == 200
-            d2 = r2.json()
-            assert d2["reply"] == "Tell me what to change."
-            assert d2["collected"]["is_change_mode"] is True
-
-            # Send "location - worli"
-            r3 = client.post(
-                "/api/chat/turn",
-                headers=auth,
-                json={"message": "location - worli", "collected": d2["collected"]},
-            )
-            assert r3.status_code == 200
-            d3 = r3.json()
-            # Reply says Worli isn't saved / isn't one of your saved locations
-            assert "worli isn't" in d3["reply"].lower()
-            assert d3["state"] == "collecting_details"
-            assert d3["expect"]["kind"] == "choice"
-            option_values = [o["value"] for o in d3["expect"]["options"]]
-            assert str(loc1_id) in option_values
-            assert str(loc2_id) in option_values
-            assert "none" in option_values
-            # Title, category, vendors unchanged
-            assert d3["collected"]["title"] == orig_title
-            assert d3["collected"]["category"] == orig_cat
-            assert d3["collected"]["vendor_names"] == orig_vendors
-            # No confirm card yet
-            assert d3["state"] != "confirm_details"
-
-            # Now choose "No location"
-            r4 = client.post(
-                "/api/chat/turn",
-                headers=auth,
-                json={"action": "select_location", "value": "none", "collected": d3["collected"]},
-            )
-            assert r4.status_code == 200
-            d4 = r4.json()
-            assert d4["state"] == "confirm_details"
-            assert d4["collected"]["location_id"] is None
-            assert d4["collected"]["no_location"] is True
-    finally:
-        app.dependency_overrides.clear()
-        async with async_session() as s:
-            await s.execute(delete(Location).where(Location.company_id == company_id))
-            await s.execute(delete(User).where(User.firebase_uid == user_uid))
-            await s.execute(delete(Company).where(Company.id == company_id))
-            await s.commit()
-
-
-@pytest.mark.asyncio
-async def test_change_details_unmatched_location_after_already_set():
-    """Change details with an unmatched location after a location was already set -> previous location kept until the user chooses."""
-    user_uid = f"uid-chat-chprevloc-{uuid.uuid4().hex}"
-    auth = {"Authorization": "Bearer token"}
-    fake_gemini = _build_test_fake_gemini()
-    app.dependency_overrides[get_gemini_client] = lambda: fake_gemini
-
-    company_id = uuid.uuid4()
-    loc1_id = uuid.uuid4()
-    loc2_id = uuid.uuid4()
-
-    async with async_session() as s:
-        co = Company(id=company_id, name="PrevLoc Co")
-        s.add(co)
-        loc1 = Location(id=loc1_id, company_id=company_id, name="Andheri East Office", city="Mumbai")
-        loc2 = Location(id=loc2_id, company_id=company_id, name="Powai Campus", city="Mumbai")
-        s.add_all([loc1, loc2])
-        usr = User(
-            id=uuid.uuid4(),
-            firebase_uid=user_uid,
-            email="prevloc_user@vixenone.app",
-            display_name="PrevLoc User",
-            role=UserRole.FACILITIES_MANAGER,
-            company_id=company_id,
-        )
-        s.add(usr)
-        await s.commit()
-
-    try:
-        with patch("firebase_admin.auth.verify_id_token", return_value=_token(user_uid)):
-            # Initial setup with Andheri East Office
-            r1 = client.post(
-                "/api/chat/turn",
-                headers=auth,
-                json={"message": "Evaluate Housekeeping between BrightNest and Shubh location: Andheri"},
-            )
-            assert r1.status_code == 200
-            d1 = r1.json()
-            assert d1["state"] == "confirm_details"
-            assert str(d1["collected"]["location_id"]) == str(loc1_id)
-
-            # Click "Change details" -> "Tell me what to change."
-            r2 = client.post(
-                "/api/chat/turn",
-                headers=auth,
-                json={"action": "change_details", "collected": d1["collected"]},
-            )
-            assert r2.status_code == 200
-            d2 = r2.json()
-
-            # Send "location - worli" (unmatched location)
-            r3 = client.post(
-                "/api/chat/turn",
-                headers=auth,
-                json={"message": "location - worli", "collected": d2["collected"]},
-            )
-            assert r3.status_code == 200
-            d3 = r3.json()
-            assert "worli isn't" in d3["reply"].lower()
-            assert d3["state"] == "collecting_details"
-            # Previous location KEPT until user chooses!
-            assert str(d3["collected"]["location_id"]) == str(loc1_id)
-
-            # User chooses Powai Campus
-            r4 = client.post(
-                "/api/chat/turn",
-                headers=auth,
-                json={"action": "select_location", "value": str(loc2_id), "collected": d3["collected"]},
-            )
-            assert r4.status_code == 200
-            d4 = r4.json()
-            assert d4["state"] == "confirm_details"
-            assert str(d4["collected"]["location_id"]) == str(loc2_id)
-            assert "Powai Campus" in d4["reply"]
-    finally:
-        app.dependency_overrides.clear()
-        async with async_session() as s:
-            await s.execute(delete(Location).where(Location.company_id == company_id))
-            await s.execute(delete(User).where(User.firebase_uid == user_uid))
-            await s.execute(delete(Company).where(Company.id == company_id))
-            await s.commit()
-
-
-@pytest.mark.asyncio
-async def test_change_details_location_andheri():
-    """Change details 'location Andheri' -> Andheri East Office; others unchanged."""
-    user_uid = f"uid-chat-chandheri-{uuid.uuid4().hex}"
-    auth = {"Authorization": "Bearer token"}
-    fake_gemini = _build_test_fake_gemini()
-    app.dependency_overrides[get_gemini_client] = lambda: fake_gemini
-
-    company_id = uuid.uuid4()
-    loc1_id = uuid.uuid4()
-    loc2_id = uuid.uuid4()
-
-    async with async_session() as s:
-        co = Company(id=company_id, name="Andheri Co")
-        s.add(co)
-        loc1 = Location(id=loc1_id, company_id=company_id, name="Andheri East Office", city="Mumbai")
-        loc2 = Location(id=loc2_id, company_id=company_id, name="Powai Campus", city="Mumbai")
-        s.add_all([loc1, loc2])
-        usr = User(
-            id=uuid.uuid4(),
-            firebase_uid=user_uid,
-            email="andheri_user@vixenone.app",
-            display_name="Andheri User",
-            role=UserRole.FACILITIES_MANAGER,
-            company_id=company_id,
-        )
-        s.add(usr)
-        await s.commit()
-
-    try:
-        with patch("firebase_admin.auth.verify_id_token", return_value=_token(user_uid)):
-            # Initial setup with Powai
-            r1 = client.post(
-                "/api/chat/turn",
-                headers=auth,
-                json={"message": "Evaluate Housekeeping between BrightNest and Shubh location: Powai"},
-            )
-            assert r1.status_code == 200
-            d1 = r1.json()
-            assert d1["state"] == "confirm_details"
-            assert str(d1["collected"]["location_id"]) == str(loc2_id)
-            orig_title = d1["collected"]["title"]
-            orig_cat = d1["collected"]["category"]
-            orig_vendors = d1["collected"]["vendor_names"]
-
-            # Click "Change details" -> "Tell me what to change."
-            r2 = client.post(
-                "/api/chat/turn",
-                headers=auth,
-                json={"action": "change_details", "collected": d1["collected"]},
-            )
-            assert r2.status_code == 200
-            d2 = r2.json()
-
-            # Send "location Andheri"
-            r3 = client.post(
-                "/api/chat/turn",
-                headers=auth,
-                json={"message": "location Andheri", "collected": d2["collected"]},
-            )
-            assert r3.status_code == 200
-            d3 = r3.json()
-            assert d3["state"] == "confirm_details"
-            assert str(d3["collected"]["location_id"]) == str(loc1_id)
-            assert "Andheri East Office" in d3["reply"]
-            assert d3["collected"]["title"] == orig_title
-            assert d3["collected"]["category"] == orig_cat
-            assert d3["collected"]["vendor_names"] == orig_vendors
-    finally:
-        app.dependency_overrides.clear()
-        async with async_session() as s:
-            await s.execute(delete(Location).where(Location.company_id == company_id))
-            await s.execute(delete(User).where(User.firebase_uid == user_uid))
-            await s.execute(delete(Company).where(Company.id == company_id))
-            await s.commit()
-
-
-@pytest.mark.asyncio
 async def test_change_details_category_pest_control():
-    """Change details 'category pest control' -> custom category; location unchanged."""
+    """Change details 'category pest control' -> custom category."""
     user_uid = f"uid-chat-chpest-{uuid.uuid4().hex}"
     auth = {"Authorization": "Bearer token"}
     fake_gemini = _build_test_fake_gemini()
     app.dependency_overrides[get_gemini_client] = lambda: fake_gemini
 
     company_id = uuid.uuid4()
-    loc1_id = uuid.uuid4()
 
     async with async_session() as s:
         co = Company(id=company_id, name="Pest Co")
         s.add(co)
-        loc1 = Location(id=loc1_id, company_id=company_id, name="Andheri East Office", city="Mumbai")
-        s.add(loc1)
         usr = User(
             id=uuid.uuid4(),
             firebase_uid=user_uid,
@@ -1643,13 +1012,12 @@ async def test_change_details_category_pest_control():
             r1 = client.post(
                 "/api/chat/turn",
                 headers=auth,
-                json={"message": "Evaluate Housekeeping between BrightNest and Shubh location: Andheri"},
+                json={"message": "Evaluate Housekeeping between BrightNest and Shubh"},
             )
             assert r1.status_code == 200
             d1 = r1.json()
             assert d1["state"] == "confirm_details"
             assert d1["collected"]["category"] == "Facilities / Housekeeping"
-            assert str(d1["collected"]["location_id"]) == str(loc1_id)
             orig_title = d1["collected"]["title"]
             orig_vendors = d1["collected"]["vendor_names"]
 
@@ -1672,13 +1040,11 @@ async def test_change_details_category_pest_control():
             d3 = r3.json()
             assert d3["state"] == "confirm_details"
             assert d3["collected"]["category"] == "pest control"
-            assert str(d3["collected"]["location_id"]) == str(loc1_id)
             assert d3["collected"]["title"] == orig_title
             assert d3["collected"]["vendor_names"] == orig_vendors
     finally:
         app.dependency_overrides.clear()
         async with async_session() as s:
-            await s.execute(delete(Location).where(Location.company_id == company_id))
             await s.execute(delete(User).where(User.firebase_uid == user_uid))
             await s.execute(delete(Company).where(Company.id == company_id))
             await s.commit()
@@ -1686,20 +1052,17 @@ async def test_change_details_category_pest_control():
 
 @pytest.mark.asyncio
 async def test_title_keeps_words_when_no_location_parsed():
-    """'Contract for security services, vendors A and B' -> title keeps 'for security services'; no location set from it."""
+    """'Contract for security services, vendors A and B' -> title keeps 'for security services'."""
     user_uid = f"uid-chat-titlewords-{uuid.uuid4().hex}"
     auth = {"Authorization": "Bearer token"}
     fake_gemini = _build_test_fake_gemini()
     app.dependency_overrides[get_gemini_client] = lambda: fake_gemini
 
     company_id = uuid.uuid4()
-    loc1_id = uuid.uuid4()
 
     async with async_session() as s:
         co = Company(id=company_id, name="Security Co")
         s.add(co)
-        loc1 = Location(id=loc1_id, company_id=company_id, name="Andheri East Office", city="Mumbai")
-        s.add(loc1)
         usr = User(
             id=uuid.uuid4(),
             firebase_uid=user_uid,
@@ -1723,13 +1086,10 @@ async def test_title_keeps_words_when_no_location_parsed():
             # Title keeps full words "Contract for security services"
             assert "for security services" in d["collected"]["title"].lower()
             assert d["collected"]["title"] == "Contract for security services"
-            # No location set from it
-            assert d["collected"]["location_id"] is None
-            assert d["collected"]["no_location"] is False
+            assert "location_id" not in d["collected"]
     finally:
         app.dependency_overrides.clear()
         async with async_session() as s:
-            await s.execute(delete(Location).where(Location.company_id == company_id))
             await s.execute(delete(User).where(User.firebase_uid == user_uid))
             await s.execute(delete(Company).where(Company.id == company_id))
             await s.commit()
