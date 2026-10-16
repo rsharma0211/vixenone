@@ -335,7 +335,7 @@ def compute_recommendation(
     # Clean recommendation for top_vendor
     top_rounded = int(round_half_up(top_vendor["exact_total"], 0))
     rec_reasons: List[str] = [
-        f"Highest total score ({top_rounded}) and all mandatory requirements met."
+        f"{top_vendor['name']}: Highest total score ({top_rounded}) and all mandatory requirements met."
     ]
     for v in analysed_vendors:
         if v["vendor_id"] == top_vendor["vendor_id"]:

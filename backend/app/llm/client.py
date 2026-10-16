@@ -5,6 +5,7 @@ import inspect
 import json
 import logging
 from pathlib import Path
+import re
 import time
 from typing import Any, Callable, Dict, List, Optional, Sequence, Type, TypeVar
 from google import genai
@@ -767,11 +768,23 @@ class FakeGeminiClient(GeminiClient):
         if msg_lower in ("security", "housekeeping", "pantry", "pest control", "facilities", "pantry amc"):
             return ParsedEvaluationDetails(title=None, category=user_message.strip(), location=None, vendor_names=[])
 
-        if msg_lower in ("andheri", "mumbai", "powai", "bkc", "delhi", "pune", "headquarters"):
+        if msg_lower in ("andheri", "mumbai", "powai", "bkc", "delhi", "pune", "headquarters", "worli"):
             return ParsedEvaluationDetails(title=None, category=None, location=user_message.strip(), vendor_names=[])
 
         if msg_lower in ("no location", "none"):
             return ParsedEvaluationDetails(title=None, category=None, location="none", vendor_names=[])
+
+        # Standalone location specification: "location - worli", "location worli", "location: worli", "location Andheri", etc.
+        loc_spec_match = re.search(r"^(?:change\s+)?(?:the\s+)?location(?:\s+to)?\s*[-:=]?\s*(.+)$", user_message.strip(), re.IGNORECASE)
+        if loc_spec_match:
+            loc_val = loc_spec_match.group(1).strip()
+            return ParsedEvaluationDetails(title=None, category=None, location=loc_val, vendor_names=[])
+
+        # Standalone category specification: "category pest control", "category: pest control", "category - pest control", etc.
+        cat_spec_match = re.search(r"^(?:change\s+)?(?:the\s+)?category(?:\s+to)?\s*[-:=]?\s*(.+)$", user_message.strip(), re.IGNORECASE)
+        if cat_spec_match:
+            cat_val = cat_spec_match.group(1).strip()
+            return ParsedEvaluationDetails(title=None, category=cat_val, location=None, vendor_names=[])
 
         # Change details or location Powai
         if "location powai" in msg_lower or (msg_lower.startswith("location") and "powai" in msg_lower):
@@ -798,6 +811,8 @@ class FakeGeminiClient(GeminiClient):
 
         if "location:" in msg_lower:
             location = user_message.split("location:", 1)[1].strip()
+        elif "location -" in msg_lower:
+            location = user_message.split("location -", 1)[1].strip()
         elif "andheri east" in msg_lower or "andheri" in msg_lower:
             location = "Andheri East Office"
         elif "mumbai" in msg_lower:
@@ -810,6 +825,8 @@ class FakeGeminiClient(GeminiClient):
             location = "Delhi"
         elif "pune" in msg_lower:
             location = "Pune"
+        elif "worli" in msg_lower:
+            location = "Worli"
 
         # 4 vendors case for testing "4 vendors -> asks to choose"
         if "4 vendors" in msg_lower or ("vendor a" in msg_lower and "vendor d" in msg_lower) or "four vendors" in msg_lower:
@@ -830,8 +847,10 @@ class FakeGeminiClient(GeminiClient):
             vendors = ["Vendor 1", "Vendor 2"]
             title = "Facilities AMC"
             category = category or "Facilities"
-        elif "vendor a" in msg_lower and "vendor b" in msg_lower:
+        elif ("vendor a" in msg_lower or "vendors a" in msg_lower) and ("vendor b" in msg_lower or "and b" in msg_lower):
             vendors = ["Vendor A", "Vendor B"]
+            if "contract for security services" in msg_lower:
+                title = "Contract for security services"
 
         if not title:
             # If user message provides a clear title phrase or evaluate sentence

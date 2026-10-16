@@ -720,21 +720,58 @@ class ChatService:
                 # Title cleaning: strip "at <location>", "in <location>", "for <location>"
                 if parsed.location and parsed.title:
                     loc_s = parsed.location.strip()
-                    parsed.title = re.sub(
-                        rf"\s+(?:at|in|for)\s+{re.escape(loc_s)}\b",
-                        "",
-                        parsed.title,
-                        flags=re.IGNORECASE,
-                    ).strip()
+                    if loc_s and loc_s.lower() != "none":
+                        parsed.title = re.sub(
+                            rf"\s+(?:at|in|for)\s+{re.escape(loc_s)}\b",
+                            "",
+                            parsed.title,
+                            flags=re.IGNORECASE,
+                        ).strip()
 
                 # Handle Category
                 raw_cat = parsed.category
                 if not raw_cat and (is_change or "category" in missing_fields):
-                    if "housekeeping" in msg.lower() or "security" in msg.lower() or "only category:" in msg.lower():
+                    cat_m = re.search(
+                        r"^(?:change\s+)?(?:the\s+)?category(?:\s+to)?\s*[-:=]?\s*(.+)$",
+                        msg.strip(),
+                        re.IGNORECASE,
+                    )
+                    if cat_m:
+                        raw_cat = cat_m.group(1).strip()
+                    elif "housekeeping" in msg.lower() or "security" in msg.lower() or "only category:" in msg.lower():
                         raw_cat = msg
 
+                if is_change and not raw_cat and msg.lower().strip() in ("change category", "category", "change category to"):
+                    options = [
+                        ChatChoiceOption(
+                            action="select_category",
+                            label="Facilities / Housekeeping",
+                            value="Facilities / Housekeeping",
+                        ),
+                        ChatChoiceOption(
+                            action="select_category",
+                            label="Facilities / Security",
+                            value="Facilities / Security",
+                        ),
+                        ChatChoiceOption(action="select_category", label="Other", value="other"),
+                    ]
+                    return ChatTurnResponse(
+                        reply="Which category is this evaluation for?",
+                        state="collecting_details",
+                        expect=ChatExpect(kind="choice", options=options),
+                        collected=collected,
+                    )
+
                 if raw_cat and (is_change or "category" in missing_fields):
-                    cat_lower = raw_cat.lower()
+                    cat_lower = raw_cat.lower().strip()
+                    if cat_lower in ("other", "other category"):
+                        collected.awaiting_custom_category = True
+                        return ChatTurnResponse(
+                            reply="Type your category.",
+                            state="collecting_details",
+                            expect=ChatExpect(kind="text"),
+                            collected=collected,
+                        )
                     has_hk = "housekeeping" in cat_lower
                     has_sec = "security" in cat_lower
                     if has_hk and has_sec:
@@ -778,12 +815,40 @@ class ChatService:
                         collected.category = raw_cat.strip()[:60]
 
                 # Handle Location
-                if parsed.location and parsed.location.strip() and company_locs:
-                    loc_query = parsed.location.strip()
+                raw_loc = parsed.location
+                if not raw_loc and (is_change or "location" in missing_fields):
+                    loc_m = re.search(
+                        r"^(?:change\s+)?(?:the\s+)?location(?:\s+to)?\s*[-:=]?\s*(.+)$",
+                        msg.strip(),
+                        re.IGNORECASE,
+                    )
+                    if loc_m:
+                        raw_loc = loc_m.group(1).strip()
+
+                if is_change and not raw_loc and msg.lower().strip() in ("change location", "location", "change location to"):
+                    if company_locs:
+                        loc_opts = [
+                            ChatChoiceOption(
+                                action="select_location",
+                                label=f"{loc.name} ({loc.city})" if loc.city else loc.name,
+                                value=str(loc.id),
+                            )
+                            for loc, _ in company_locs
+                        ]
+                        loc_opts.append(ChatChoiceOption(action="select_location", label="No location", value="none"))
+                        return ChatTurnResponse(
+                            reply="Which location is this evaluation for?",
+                            state="collecting_details",
+                            expect=ChatExpect(kind="choice", options=loc_opts),
+                            collected=collected,
+                        )
+
+                if raw_loc and raw_loc.strip():
+                    loc_query = raw_loc.strip()
                     if loc_query.lower() in ("no location", "none"):
                         collected.location_id = None
                         collected.no_location = True
-                    else:
+                    elif company_locs:
                         matched_locs = find_location_matches(company_locs, loc_query)
                         if len(matched_locs) == 1:
                             collected.location_id = matched_locs[0].id
@@ -838,12 +903,14 @@ class ChatService:
                                 for loc, _ in company_locs
                             ]
                             loc_opts.append(ChatChoiceOption(action="select_location", label="No location", value="none"))
+                            loc_display = loc_query.capitalize() if loc_query.islower() else loc_query
                             return ChatTurnResponse(
-                                reply=f"{loc_query} isn't one of your saved locations.",
+                                reply=f"{loc_display} isn't one of your saved locations.",
                                 state="collecting_details",
                                 expect=ChatExpect(kind="choice", options=loc_opts),
                                 collected=collected,
                             )
+
 
                 # Handle Title
                 if is_change or "title" in missing_fields:
@@ -861,6 +928,19 @@ class ChatService:
                             collected.vendor_names = (collected.vendor_names or []) + new_v
 
                 if is_change:
+                    field_changed = bool(
+                        raw_cat
+                        or raw_loc
+                        or (parsed.title and parsed.title.strip())
+                        or (parsed.vendor_names and len(parsed.vendor_names) > 0)
+                    )
+                    if not field_changed:
+                        return ChatTurnResponse(
+                            reply="I couldn't tell what to change. Please specify title, category, location, or vendors.",
+                            state="collecting_details",
+                            expect=ChatExpect(kind="text"),
+                            collected=collected,
+                        )
                     collected.is_change_mode = False
 
         elif not collected.title and not collected.category and len(collected.vendor_names or []) == 0:
@@ -971,6 +1051,7 @@ class ChatService:
             )
 
         # Confirm details card
+        collected.is_change_mode = False
         loc_display = "None"
         if collected.location_id and company_id:
             loc_obj = await CompanyRepository.get_location(session, company_id, collected.location_id)

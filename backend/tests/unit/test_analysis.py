@@ -285,7 +285,7 @@ def test_recommendation_rules():
     rec = compute_recommendation(vendors)
     assert rec["state"] == "recommended"
     assert rec["vendor_id"] == "v1"
-    assert rec["reasons"][0] == "Highest total score (86) and all mandatory requirements met."
+    assert rec["reasons"][0] == "Vendor 1: Highest total score (86) and all mandatory requirements met."
 
     # Case 2: Mandatory failure excludes vendor
     vendors_fail = [
